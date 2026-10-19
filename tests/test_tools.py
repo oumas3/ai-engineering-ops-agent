@@ -29,3 +29,8 @@ def test_rejects_invalid_file_data(tmp_path: Path) -> None:
 
     with pytest.raises(ValidationError):
         get_ci_status(path)
+def test_missing_ci_file(tmp_path: Path) -> None:
+    path = tmp_path / "missing.json"
+
+    with pytest.raises(FileNotFoundError):
+        get_ci_status(path)
