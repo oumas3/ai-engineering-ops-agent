@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from ops_agent.models import CIResult
+from ops_agent.models import CIResult , FailedTest
 
 
 def test_accepts_valid_ci_result() -> None:
@@ -36,3 +36,10 @@ def test_rejects_zero_run_id() -> None:
         )
 
     assert error.value.errors()[0]["loc"] == ("run_id",)
+
+def test_rejects_failed_test_without_message() -> None:
+    with pytest.raises(ValidationError) as error:
+        FailedTest(name="test_health_endpoint")
+
+    assert error.value.errors()[0]["loc"] == ("message",)
+

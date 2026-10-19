@@ -3,8 +3,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from ops_agent.tools import get_ci_status
-
+from ops_agent.tools import get_ci_status, get_failed_tests
 
 def test_loads_ci_result(tmp_path: Path) -> None:
     path = tmp_path / "ci_run.json"
@@ -34,3 +33,29 @@ def test_missing_ci_file(tmp_path: Path) -> None:
 
     with pytest.raises(FileNotFoundError):
         get_ci_status(path)
+
+def test_loads_failed_tests_report(tmp_path: Path) -> None:
+    path = tmp_path / "failed_tests.json"
+    path.write_text(
+        """
+        {
+            "run_id": 42,
+            "tests": [
+                {
+                    "name": "test_health_endpoint",
+                    "message": "Expected HTTP 200, received HTTP 503."
+                }
+            ]
+        }
+        """,
+        encoding="utf-8",
+    )
+
+    report = get_failed_tests(path)
+
+    assert report.run_id == 42
+    assert len(report.tests) == 1
+    assert report.tests[0].name == "test_health_endpoint"
+    assert report.tests[0].message == (
+        "Expected HTTP 200, received HTTP 503."
+    )
