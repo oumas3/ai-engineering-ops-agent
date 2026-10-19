@@ -12,10 +12,13 @@ def main() -> None:
     except FileNotFoundError:
         print(f"Cannot read CI status: report not found at {path}")
         return
+    except ValidationError as error:
+        print("Cannot read CI status: the report contains invalid data.")
+        print(error)
+        return
 
     print(f"Service: {result.service}")
     print(f"CI run: {result.run_id}")
-    print(f"Status: {result.status}")
     print(f"Status: {result.status}")
 
 
