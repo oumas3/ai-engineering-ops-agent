@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from ops_agent.tools import get_ci_status, get_failed_tests,read_logs
+from ops_agent.tools import get_ci_status, get_failed_tests,read_logs ,get_service_status
 
 def test_loads_ci_result(tmp_path: Path) -> None:
     path = tmp_path / "ci_run.json"
@@ -86,3 +86,23 @@ def test_loads_logs_report(tmp_path: Path) -> None:
     assert len(report.entries) == 1
     assert report.entries[0].level == "ERROR"
     assert report.entries[0].message == "Database connection timed out."
+
+
+def test_loads_service_status(tmp_path: Path) -> None:
+    path = tmp_path / "service_status.json"
+    path.write_text(
+        """
+        {
+            "service": "backend",
+            "environment": "staging",
+            "status": "degraded"
+        }
+        """,
+        encoding="utf-8",
+    )
+
+    report = get_service_status(path)
+
+    assert report.service == "backend"
+    assert report.environment == "staging"
+    assert report.status == "degraded"

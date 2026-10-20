@@ -1,0 +1,5 @@
+{
+  "service": "backend",
+  "environment": "staging",
+  "status": "degraded"
+}

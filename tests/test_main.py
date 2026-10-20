@@ -1,4 +1,5 @@
-from ops_agent.main import main
+from ops_agent.main import show_service_status , main
+from ops_agent.models import CIResult
 
 
 def test_main_handles_missing_report(tmp_path, monkeypatch, capsys) -> None:
@@ -75,3 +76,29 @@ def test_main_shows_logs_without_failed_tests(
     output = capsys.readouterr().out
     assert "Failed-test report is missing." in output
     assert "[ERROR] Database connection timed out." in output
+
+def test_rejects_service_status_from_wrong_environment(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    data = tmp_path / "data"
+    data.mkdir()
+
+    (data / "service_status.json").write_text(
+        """
+        {
+            "service": "backend",
+            "environment": "production",
+            "status": "healthy"
+        }
+        """,
+        encoding="utf-8",
+    )
+
+    monkeypatch.chdir(tmp_path)
+    ci = CIResult(run_id=42, service="backend", status="failed")
+
+    show_service_status(ci, "staging")
+
+    output = capsys.readouterr().out
+    assert "service or environment does not match" in output
+    assert "Service health:" not in output

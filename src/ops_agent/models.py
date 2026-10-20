@@ -31,4 +31,10 @@ class LogsReport(BaseModel):
     run_id: int = Field(gt=0)
     service: str = Field(min_length=1)
     entries: list[LogEntry]
+class ServiceStatus(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    service: str = Field(min_length=1)
+    environment: Literal["local", "staging", "production"]
+    status: Literal["healthy", "degraded", "down", "unknown"]
     

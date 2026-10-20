@@ -2,11 +2,12 @@ from pathlib import Path
 from ops_agent.models import CIResult
 from pydantic import ValidationError
 
-from ops_agent.tools import get_ci_status , get_failed_tests , read_logs
+from ops_agent.tools import get_ci_status , get_failed_tests, get_service_status , read_logs
 
 
 def main() -> None:
     path = Path("data/ci_run.json")
+    target_environment = "staging"
 
     try:
         result = get_ci_status(path)
@@ -24,6 +25,7 @@ def main() -> None:
     if result.status == "failed":
      show_failed_tests(result)
      show_logs(result)
+     show_service_status(result, target_environment)
    
 def show_failed_tests(ci: CIResult) -> None:
     try:
@@ -70,6 +72,26 @@ def show_logs(ci: CIResult) -> None:
 
     for entry in report.entries:
         print(f"[{entry.level}] {entry.message}")
+
+def show_service_status(ci: CIResult, environment: str) -> None:
+    try:
+        report = get_service_status(Path("data/service_status.json"))
+    except FileNotFoundError:
+        print("Service-status report is missing.")
+        return
+    except ValidationError as error:
+        print("Service-status report contains invalid data.")
+        print(error)
+        return
+
+    if report.service != ci.service or report.environment != environment:
+        print("Cannot use service status: service or environment does not match.")
+        return
+
+    print(
+        f"Service health: {report.status} "
+        f"({report.service}, {report.environment})"
+    )
 
 if __name__ == "__main__":
     main()
