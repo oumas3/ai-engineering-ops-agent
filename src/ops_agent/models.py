@@ -19,3 +19,16 @@ class FailedTestsReport(BaseModel):
 
     run_id: int = Field(gt=0)
     tests: list[FailedTest]
+class LogEntry(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    level: Literal["INFO", "WARNING", "ERROR"]
+    message: str = Field(min_length=1)
+
+class LogsReport(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    run_id: int = Field(gt=0)
+    service: str = Field(min_length=1)
+    entries: list[LogEntry]
+    

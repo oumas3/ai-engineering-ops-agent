@@ -1,0 +1,14 @@
+{
+  "run_id": 42,
+  "service": "backend",
+  "entries": [
+    {
+      "level": "INFO",
+      "message": "Starting backend health check."
+    },
+    {
+      "level": "ERROR",
+      "message": "Database connection timed out."
+    }
+  ]
+}

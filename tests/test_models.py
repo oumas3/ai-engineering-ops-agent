@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from ops_agent.models import CIResult , FailedTest
+from ops_agent.models import CIResult , FailedTest, LogEntry, LogsReport 
 
 
 def test_accepts_valid_ci_result() -> None:
@@ -42,4 +42,14 @@ def test_rejects_failed_test_without_message() -> None:
         FailedTest(name="test_health_endpoint")
 
     assert error.value.errors()[0]["loc"] == ("message",)
+
+def test_rejects_unknown_log_level() -> None:
+    with pytest.raises(ValidationError) as error:
+        LogEntry(
+            level="BROKEN",
+            message="Database connection timed out.",
+        )
+
+    assert error.value.errors()[0]["loc"] == ("level",)
+
 

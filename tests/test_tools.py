@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from ops_agent.tools import get_ci_status, get_failed_tests
+from ops_agent.tools import get_ci_status, get_failed_tests,read_logs
 
 def test_loads_ci_result(tmp_path: Path) -> None:
     path = tmp_path / "ci_run.json"
@@ -59,3 +59,30 @@ def test_loads_failed_tests_report(tmp_path: Path) -> None:
     assert report.tests[0].message == (
         "Expected HTTP 200, received HTTP 503."
     )
+
+
+def test_loads_logs_report(tmp_path: Path) -> None:
+    path = tmp_path / "logs.json"
+    path.write_text(
+        """
+        {
+            "run_id": 42,
+            "service": "backend",
+            "entries": [
+                {
+                    "level": "ERROR",
+                    "message": "Database connection timed out."
+                }
+            ]
+        }
+        """,
+        encoding="utf-8",
+    )
+
+    report = read_logs(path)
+
+    assert report.run_id == 42
+    assert report.service == "backend"
+    assert len(report.entries) == 1
+    assert report.entries[0].level == "ERROR"
+    assert report.entries[0].message == "Database connection timed out."
