@@ -25,6 +25,7 @@ def test_mcp_discovers_and_calls_ci_tool(
             names = [tool.name for tool in listed.tools]
 
             assert "get_ci_status" in names
+            assert "read_logs" in names
 
             response = await client.call_tool("get_ci_status", {})
 
@@ -35,5 +36,6 @@ def test_mcp_discovers_and_calls_ci_tool(
             assert ci.run_id == 42
             assert ci.service == "backend"
             assert ci.status == "failed"
+            
 
     asyncio.run(check())
