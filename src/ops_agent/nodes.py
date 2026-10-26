@@ -1,6 +1,10 @@
-from mcp import Client
-from pydantic import ValidationError
+from urllib import response
 
+from mcp import Client, client
+from pydantic import ValidationError
+import asyncio
+from mcp import Client
+from ops_agent import state
 from ops_agent.models import (
     CIResult,
     FailedTestsReport,
@@ -10,15 +14,44 @@ from ops_agent.models import (
 from ops_agent.state import InvestigationState
 
 
-class InvestigationNodes:
-    def __init__(self, client: Client) -> None:
-        self.client = client
+from mcp.types import CallToolResult
 
+class InvestigationNodes:
+    def __init__(
+        self,
+        client: Client,
+        timeout_seconds: float = 5.0,
+    ) -> None:
+        if timeout_seconds <= 0:
+            raise ValueError("timeout_seconds must be greater than zero.")
+
+        self.client = client
+        self.timeout_seconds = timeout_seconds
+
+
+    async def _call_read_tool(self, name: str) -> CallToolResult:
+        try:
+            async with asyncio.timeout(self.timeout_seconds):
+                return await self.client.call_tool(name, {})
+        except TimeoutError:
+            pass
+
+        async with asyncio.timeout(self.timeout_seconds):
+            return await self.client.call_tool(name, {})
+        
     async def collect_ci(
         self,
         state: InvestigationState,
     ) -> dict[str, object]:
-        response = await self.client.call_tool("get_ci_status", {})
+        try:
+            response = await self._call_read_tool("get_ci_status")
+        except TimeoutError:
+            return {
+                "ci": None,
+                "errors": state["errors"] + [
+                    "CI tool timed out."
+                ],
+            }
 
         if response.is_error:
             return {
@@ -55,8 +88,15 @@ class InvestigationNodes:
                 ],
             }
 
-        response = await self.client.call_tool("get_failed_tests", {})
-
+        try:
+            response = await self._call_read_tool("get_failed_tests")
+        except TimeoutError:
+            return {
+                "failed_tests": None,
+                "errors": state["errors"] + [
+                    "Failed-tests tool timed out."
+                ],
+            }
         if response.is_error:
             return {
                 "failed_tests": None,
@@ -100,8 +140,15 @@ class InvestigationNodes:
                 ],
             }
 
-        response = await self.client.call_tool("read_logs", {})
-
+        try:
+            response = await self._call_read_tool("read_logs")
+        except TimeoutError:
+            return {
+                "logs": None,
+                "errors": state["errors"] + [
+                    "Logs tool timed out."
+                ],
+            }
         if response.is_error:
             return {
                 "logs": None,
@@ -113,6 +160,7 @@ class InvestigationNodes:
         try:
             report = LogsReport.model_validate(
                 response.structured_content
+
             )
         except ValidationError:
             return {
@@ -135,8 +183,15 @@ class InvestigationNodes:
         self,
         state: InvestigationState,
     ) -> dict[str, object]:
-        response = await self.client.call_tool("get_service_status", {})
-
+        try:
+            response = await self._call_read_tool("get_service_status")
+        except TimeoutError:
+            return {
+                "service_status": None,
+                "errors": state["errors"] + [
+                    "Service-status tool timed out."
+                ],
+            }
         if response.is_error:
             return {
                 "service_status": None,
