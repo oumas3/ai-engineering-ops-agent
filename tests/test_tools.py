@@ -4,6 +4,10 @@ import pytest
 from pydantic import ValidationError
 
 from ops_agent.tools import get_ci_status, get_failed_tests,read_logs ,get_service_status
+from uuid import uuid4
+
+from ops_agent.models import IssueProposal
+from ops_agent.tools import create_issue
 
 def test_loads_ci_result(tmp_path: Path) -> None:
     path = tmp_path / "ci_run.json"
@@ -106,3 +110,53 @@ def test_loads_service_status(tmp_path: Path) -> None:
     assert report.service == "backend"
     assert report.environment == "staging"
     assert report.status == "degraded"
+def test_create_issue_does_not_duplicate_same_request(
+    tmp_path: Path,
+) -> None:
+    proposal = IssueProposal(
+        run_id=42,
+        service="backend",
+        title="Investigate backend CI failure",
+        description="The health test received HTTP 503.",
+    )
+    request_id = uuid4()
+    directory = tmp_path / "issues"
+
+    first = create_issue(proposal, directory, request_id)
+    second = create_issue(proposal, directory, request_id)
+
+    assert first == second
+    assert first.issue_id == str(request_id)
+    assert len(list(directory.glob("*.json"))) == 1
+
+def test_create_issue_rejects_changed_content_for_same_request(
+    tmp_path: Path,
+) -> None:
+    request_id = uuid4()
+    directory = tmp_path / "issues"
+
+    original = IssueProposal(
+        run_id=42,
+        service="backend",
+        title="Investigate backend CI failure",
+        description="The health test received HTTP 503.",
+    )
+    changed = IssueProposal(
+        run_id=42,
+        service="backend",
+        title="Different issue title",
+        description="The health test received HTTP 503.",
+    )
+
+    first = create_issue(original, directory, request_id)
+
+    with pytest.raises(
+        ValueError,
+        match="Request ID already exists with different issue content.",
+    ):
+        create_issue(changed, directory, request_id)
+
+    restored = create_issue(original, directory, request_id)
+
+    assert restored == first
+    assert len(list(directory.glob("*.json"))) == 1

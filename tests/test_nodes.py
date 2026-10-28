@@ -205,3 +205,26 @@ def test_remaining_nodes_handle_timeout(
     assert client.call_tool.await_count == 2
     client.call_tool.assert_awaited_with(tool_name, {})
 
+def test_prepare_issue_uses_collected_ci_without_calling_tools() -> None:
+    client = AsyncMock(spec=Client)
+    nodes = InvestigationNodes(client)
+
+    state = create_initial_state("backend", "staging")
+    state["ci"] = CIResult(
+        run_id=42,
+        service="backend",
+        status="failed",
+    )
+    state["errors"] = ["Logs tool timed out."]
+
+    update = nodes.prepare_issue(state)
+
+    proposal = update["issue_proposal"]
+
+    assert proposal is not None
+    assert proposal.run_id == 42
+    assert proposal.service == "backend"
+    assert proposal.title == "Investigate backend CI run 42 failure"
+    assert "Collection limitation: Logs tool timed out." in proposal.description
+    assert "Root cause is not established." in proposal.description
+    client.call_tool.assert_not_called()

@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from ops_agent.models import CIResult , FailedTest, LogEntry, LogsReport 
+from ops_agent.models import CIResult , FailedTest, IssueProposal, LogEntry, LogsReport 
 
 
 def test_accepts_valid_ci_result() -> None:
@@ -51,5 +51,15 @@ def test_rejects_unknown_log_level() -> None:
         )
 
     assert error.value.errors()[0]["loc"] == ("level",)
+def test_rejects_issue_proposal_with_blank_title() -> None:
+    with pytest.raises(ValidationError) as error:
+        IssueProposal(
+            run_id=42,
+            service="backend",
+            title="   ",
+            description="The health test received HTTP 503.",
+        )
+
+    assert error.value.errors()[0]["loc"] == ("title",)
 
 

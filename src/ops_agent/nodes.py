@@ -6,21 +6,28 @@ import asyncio
 from mcp import Client
 from ops_agent import state
 from ops_agent.models import (
+    AgentPermissions,
     CIResult,
     FailedTestsReport,
+    IssueProposal,
     LogsReport,
     ServiceStatus,
 )  
 from ops_agent.state import InvestigationState
-
-
+from langgraph.types import interrupt
 from mcp.types import CallToolResult
+from pathlib import Path
+from uuid import UUID
+
+from ops_agent.tools import create_issue
 
 class InvestigationNodes:
     def __init__(
         self,
         client: Client,
         timeout_seconds: float = 5.0,
+        permissions: AgentPermissions | None = None,
+        issue_directory: Path | None = None,
     ) -> None:
         if timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be greater than zero.")
@@ -28,6 +35,17 @@ class InvestigationNodes:
         self.client = client
         self.timeout_seconds = timeout_seconds
 
+        self.permissions = (
+            permissions
+            if permissions is not None
+            else AgentPermissions()
+        )
+
+        self.issue_directory = (
+            issue_directory
+            if issue_directory is not None
+            else Path(__file__).resolve().parents[2] / "runtime" / "issues"
+        )
 
     async def _call_read_tool(self, name: str) -> CallToolResult:
         try:
@@ -224,3 +242,125 @@ class InvestigationNodes:
             }
 
         return {"service_status": report}
+    def prepare_issue(
+        self,
+        state: InvestigationState,
+    ) -> dict[str, object]:
+        ci = state["ci"]
+
+        if ci is None or ci.status != "failed":
+            return {"issue_proposal": None}
+
+        lines = [
+            f"Service: {ci.service}",
+            f"CI run: {ci.run_id}",
+            "CI status: failed",
+        ]
+
+        tests = state["failed_tests"]
+        if tests is not None:
+            for test in tests.tests:
+                lines.append(f"Failed test: {test.name}: {test.message}")
+
+        logs = state["logs"]
+        if logs is not None:
+            for entry in logs.entries:
+                lines.append(f"Log [{entry.level}]: {entry.message}")
+
+        health = state["service_status"]
+        if health is not None:
+            lines.append(
+                f"Service health: {health.status} "
+                f"({health.environment})"
+            )
+
+        for error in state["errors"]:
+            lines.append(f"Collection limitation: {error}")
+
+        lines.append(
+            "Root cause is not established. "
+            "Review the collected evidence before choosing a fix."
+        )
+
+        proposal = IssueProposal(
+            run_id=ci.run_id,
+            service=ci.service,
+            title=f"Investigate {ci.service} CI run {ci.run_id} failure",
+            description="\n".join(lines),
+        )
+
+        return {"issue_proposal": proposal}
+    def request_approval(
+        self,
+        state: InvestigationState,
+    ) -> dict[str, object]:
+        proposal = state.get("issue_proposal")
+
+        if proposal is None:
+            return {
+                "approval_decision": None,
+                "errors": state["errors"] + [
+                    "Cannot request approval without an issue proposal."
+                ],
+            }
+        if not self.permissions.can_create_issue:
+            return {
+                "approval_decision": None,
+                "errors": state["errors"] + [
+                    "Issue creation is not permitted."
+                ],
+            }
+
+        decision = interrupt(
+            {
+                "action": "create_issue",
+                "proposal": proposal.model_dump(mode="json"),
+                "choices": ["approved", "rejected"],
+            }
+        )
+
+        if not isinstance(decision, str) or decision not in (
+            "approved",
+            "rejected",
+        ):
+            raise ValueError(
+                "Approval decision must be 'approved' or 'rejected'."
+            )
+
+        return {"approval_decision": decision}
+
+    def create_approved_issue(
+        self,
+        state: InvestigationState,
+    ) -> dict[str, object]:
+        if not self.permissions.can_create_issue:
+            return {
+                "errors": state["errors"] + [
+                    "Issue creation is not permitted."
+                ],
+            }
+
+        if state.get("approval_decision") != "approved":
+            return {
+                "errors": state["errors"] + [
+                    "Issue creation requires explicit approval."
+                ],
+            }
+
+        proposal = state.get("issue_proposal")
+        request_id = state.get("issue_request_id")
+
+        if proposal is None or request_id is None:
+            return {
+                "errors": state["errors"] + [
+                    "Issue creation requires a proposal and request ID."
+                ],
+            }
+
+        issue = create_issue(
+            proposal=proposal,
+            directory=self.issue_directory,
+            request_id=UUID(request_id),
+        )
+
+        return {"created_issue": issue}

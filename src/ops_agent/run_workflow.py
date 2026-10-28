@@ -7,10 +7,10 @@ from mcp import Client, StdioServerParameters
 from ops_agent.state import create_initial_state
 from ops_agent.workflow import build_graph
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
-
 import aiosqlite
-
 from ops_agent.persistence import create_serializer
+from ops_agent.models import AgentPermissions
+from langgraph.types import Command
 
 async def main() -> None:
     parser = argparse.ArgumentParser()
@@ -36,11 +36,33 @@ async def main() -> None:
         action="store_true",
         help="Pause before collecting failed-test details.",
     )
+    parser.add_argument(
+        "--allow-create-issue",
+        action="store_true",
+        help="Permit issue creation, subject to human approval.",
+    )
+    mode.add_argument(
+        "--approve",
+        action="store_true",
+        help="Approve the saved issue proposal.",
+    )
+    mode.add_argument(
+        "--reject",
+        action="store_true",
+        help="Reject the saved issue proposal.",
+    )
     args = parser.parse_args()
 
-    if args.pause_before_tests and (args.inspect or args.resume):
+    if args.pause_before_tests and (
+        args.inspect or args.resume or args.approve or args.reject
+    ):
         parser.error(
             "--pause-before-tests is only available for a new execution."
+        )
+
+    if (args.approve or args.reject) and not args.allow_create_issue:
+        parser.error(
+            "Include --allow-create-issue to load the approval workflow."
         )
     serializer = create_serializer()
     src_dir = Path(__file__).resolve().parents[1]
@@ -77,29 +99,45 @@ async def main() -> None:
                     if args.pause_before_tests
                     else None
                 ),
+                permissions=AgentPermissions(
+                can_create_issue=args.allow_create_issue,
+                ),
             )
-            if args.inspect or args.resume:
+            if args.inspect or args.resume or args.approve or args.reject:
                 snapshot = await graph.aget_state(config)
 
                 if not snapshot.values:
                     print("No saved investigation found.")
                     return
 
-                if not snapshot.values:
-                    print("No saved investigation found.")
-                    return
+                awaiting_decision = any(
+                    task.interrupts for task in snapshot.tasks
+                )
 
                 if args.inspect:
                     final_state = snapshot.values
+
+                elif args.approve or args.reject:
+                    if not awaiting_decision:
+                        print("No approval decision is pending.")
+                        return
+
+                    decision = "approved" if args.approve else "rejected"
+                    final_state = await graph.ainvoke(
+                        Command(resume=decision),
+                        config=config,
+                    )
+
                 else:
+                    if awaiting_decision:
+                        print("Use --approve or --reject for this pause.")
+                        return
+
                     if not snapshot.next:
                         print("Investigation already completed; nothing to resume.")
                         return
 
-                    final_state = await graph.ainvoke(
-                        None,
-                        config=config,
-                    )
+                    final_state = await graph.ainvoke(None, config=config)
             else:
                 final_state = await graph.ainvoke(
                     initial_state,
@@ -108,6 +146,8 @@ async def main() -> None:
             snapshot = await graph.aget_state(config)
             print("Saved service:", snapshot.values["service"])
             print("Next nodes:", snapshot.next)
+            if any(task.interrupts for task in snapshot.tasks):
+                print("Waiting for a human approval decision.")
 
     ci = final_state["ci"]
     if ci is not None:
@@ -120,10 +160,22 @@ async def main() -> None:
         else:
             for test in report.tests:
                 print(f"- {test.name}: {test.message}")
+    decision = final_state.get("approval_decision")
+    issue = final_state.get("created_issue")
+    if issue is not None:
+        print("Created local issue:", issue.issue_id)
+    if decision is not None:
+        print("Approval decision:", decision)
 
     for error in final_state["errors"]:
         print(f"Investigation error: {error}")
 
+    proposal = final_state.get("issue_proposal")
+
+    if proposal is not None:
+        print("\nProposed issue:")
+        print(proposal.title)
+        print(proposal.description)
 
 
 if __name__ == "__main__":

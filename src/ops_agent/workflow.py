@@ -11,17 +11,27 @@ from typing import Literal
 from ops_agent.nodes import InvestigationNodes
 from ops_agent.state import InvestigationState
 from langgraph.checkpoint.base import BaseCheckpointSaver
+from ops_agent.models import AgentPermissions
 
+
+def route_after_approval(
+    state: InvestigationState,
+) -> Literal["create_issue", "finish"]:
+    if state.get("approval_decision") == "approved":
+        return "create_issue"
+
+    return "finish"
 def build_graph(
     client: Client,
     timeout_seconds: float = 5.0,
     checkpointer: BaseCheckpointSaver | None = None,
     interrupt_before: list[str] | None = None,
-
+    permissions: AgentPermissions | None = None,
 ) -> CompiledStateGraph:
     nodes = InvestigationNodes(
         client,
         timeout_seconds=timeout_seconds,
+        permissions=permissions,
     )
     builder = StateGraph(InvestigationState)
 
@@ -29,6 +39,7 @@ def build_graph(
     builder.add_node("collect_failed_tests", nodes.collect_failed_tests)
     builder.add_node("collect_logs", nodes.collect_logs)
     builder.add_node("collect_service_status", nodes.collect_service_status)
+    builder.add_node("prepare_issue", nodes.prepare_issue)
     builder.add_edge(START, "collect_ci")
 
     builder.add_conditional_edges(
@@ -42,8 +53,28 @@ def build_graph(
 
     builder.add_edge("collect_failed_tests", "collect_logs")
     builder.add_edge("collect_logs", "collect_service_status")
-    builder.add_edge("collect_service_status", END)
+    builder.add_edge("collect_service_status", "prepare_issue")
+    if nodes.permissions.can_create_issue:
+        if checkpointer is None:
+            raise ValueError("Approval requires a checkpointer.")
 
+        builder.add_node("request_approval", nodes.request_approval)
+        builder.add_node("create_issue", nodes.create_approved_issue)
+
+        builder.add_edge("prepare_issue", "request_approval")
+
+        builder.add_conditional_edges(
+            "request_approval",
+            route_after_approval,
+            {
+                "create_issue": "create_issue",
+                "finish": END,
+            },
+        )
+
+        builder.add_edge("create_issue", END)
+    else:
+        builder.add_edge("prepare_issue", END)
     return builder.compile(
         checkpointer=checkpointer,
         interrupt_before=interrupt_before,
