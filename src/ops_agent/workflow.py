@@ -10,10 +10,14 @@ from unittest.mock import AsyncMock
 from typing import Literal
 from ops_agent.nodes import InvestigationNodes
 from ops_agent.state import InvestigationState
+from langgraph.checkpoint.base import BaseCheckpointSaver
 
 def build_graph(
     client: Client,
     timeout_seconds: float = 5.0,
+    checkpointer: BaseCheckpointSaver | None = None,
+    interrupt_before: list[str] | None = None,
+
 ) -> CompiledStateGraph:
     nodes = InvestigationNodes(
         client,
@@ -40,7 +44,10 @@ def build_graph(
     builder.add_edge("collect_logs", "collect_service_status")
     builder.add_edge("collect_service_status", END)
 
-    return builder.compile()
+    return builder.compile(
+        checkpointer=checkpointer,
+        interrupt_before=interrupt_before,
+    )
 
 def route_after_ci(
     state: InvestigationState,
