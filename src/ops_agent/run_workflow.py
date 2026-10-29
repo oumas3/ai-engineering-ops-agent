@@ -51,6 +51,10 @@ async def main() -> None:
         action="store_true",
         help="Reject the saved issue proposal.",
     )
+    parser.add_argument(
+        "--report-run",
+        help="Select a generated local report folder by its UUID.",
+    )
     args = parser.parse_args()
 
     if args.pause_before_tests and (
@@ -66,11 +70,14 @@ async def main() -> None:
         )
     serializer = create_serializer()
     src_dir = Path(__file__).resolve().parents[1]
+    server_env = {"PYTHONPATH": str(src_dir)}
 
+    if args.report_run is not None:
+        server_env["OPS_REPORT_RUN"] = args.report_run
     params = StdioServerParameters(
         command=sys.executable,
         args=["-m", "ops_agent.mcp_server"],
-        env={"PYTHONPATH": str(src_dir)},
+        env=server_env,
     )
 
     initial_state = create_initial_state("backend", "staging")

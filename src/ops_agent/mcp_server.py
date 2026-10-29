@@ -11,11 +11,19 @@ from ops_agent.tools import (
     read_logs as load_logs,
     get_service_status as load_service_status
 )
+import os
+from uuid import UUID
 
 server = MCPServer("Engineering Operations")
 
-DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+PROJECT_DIR = Path(__file__).resolve().parents[2]
+selected_run = os.environ.get("OPS_REPORT_RUN")
 
+if selected_run is None:
+    DATA_DIR = PROJECT_DIR / "data"
+else:
+    run_folder = UUID(selected_run).hex
+    DATA_DIR = PROJECT_DIR / "runtime" / "runs" / run_folder
 
 @server.tool()
 def get_ci_status() -> CIResult:

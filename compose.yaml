@@ -1,0 +1,20 @@
+services:
+  backend:
+    build:
+       context: ./services/backend
+    ports:
+    - "127.0.0.1:8000:8000"
+    environment:
+      DATABASE_URL: postgresql://ops_demo:local_demo_password@database:5432/ops_demo
+
+  database:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ops_demo
+      POSTGRES_PASSWORD: local_demo_password
+      POSTGRES_DB: ops_demo
+    volumes:
+      - database_data:/var/lib/postgresql/data
+
+volumes:
+  database_data:
