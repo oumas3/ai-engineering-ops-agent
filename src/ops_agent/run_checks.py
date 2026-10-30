@@ -4,12 +4,11 @@ from pathlib import Path
 from uuid import uuid4
 
 from ops_agent.models import CIResult
-from ops_agent.report_parser import parse_failed_tests
 from secrets import randbelow
 from datetime import datetime, timezone
 import os
 import shutil
-
+from ops_agent.report_parser import parse_backend_logs, parse_failed_tests
 
 def main() -> None:
     docker_executable = (
@@ -102,7 +101,16 @@ def main() -> None:
         logs_result.stdout,
         encoding="utf-8",
     )
+    logs = parse_backend_logs(
+        path=report_dir / "backend.log",
+        run_id=run_id,
+        service="backend",
+    )
 
+    (report_dir / "logs.json").write_text(
+        logs.model_dump_json(indent=2),
+        encoding="utf-8",
+    )
 
 if __name__ == "__main__":
     main()

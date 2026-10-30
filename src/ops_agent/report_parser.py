@@ -4,7 +4,6 @@ from xml.etree import ElementTree
 from ops_agent.models import FailedTest, FailedTestsReport, LogEntry, LogsReport
 import re
 
-
 def parse_failed_tests(
     path: Path,
     run_id: int,
@@ -78,4 +77,6 @@ def parse_backend_logs(
         run_id=run_id,
         service=service,
         entries=entries,
-    )
+    ) 
+
+
