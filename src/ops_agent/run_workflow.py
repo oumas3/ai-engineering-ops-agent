@@ -80,7 +80,8 @@ async def main() -> None:
         env=server_env,
     )
 
-    initial_state = create_initial_state("backend", "staging")
+    environment = "local" if args.report_run is not None else "staging"
+    initial_state = create_initial_state("backend", environment)
    
     runtime_dir = Path(__file__).resolve().parents[2] / "runtime"
     runtime_dir.mkdir(parents=True, exist_ok=True)

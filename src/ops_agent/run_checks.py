@@ -9,12 +9,12 @@ from datetime import datetime, timezone
 import os
 import shutil
 from ops_agent.report_parser import parse_backend_logs, parse_failed_tests
-
+from ops_agent.service_probe import probe_backend
 def main() -> None:
     docker_executable = (
         os.environ.get("OPS_DOCKER_EXECUTABLE")
         or shutil.which("docker")
-    )
+    ) 
 
     if docker_executable is None:
         raise RuntimeError(
@@ -43,8 +43,13 @@ def main() -> None:
         cwd=project_dir,
         check=False,
     )
+    health = probe_backend()
     finished_at = datetime.now(timezone.utc).isoformat()
 
+    (report_dir / "service_status.json").write_text(
+        health.model_dump_json(indent=2),
+        encoding="utf-8",
+    )
 
     if result.returncode not in (0, 1):
         raise RuntimeError(
