@@ -68,4 +68,15 @@ class CreatedIssue(BaseModel):
     service: str = Field(min_length=1)
     title: str = Field(min_length=1, max_length=200)
     description: str = Field(min_length=1)
+
+class InvestigationAnalysis(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+        strict=True,
+    )
+
+    observations: list[str]
+    hypotheses: list[str]
+    recommended_checks: list[str]
+    limitations: list[str]
     

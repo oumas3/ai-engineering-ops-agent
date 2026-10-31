@@ -1,0 +1,24 @@
+{
+  "case_id": "readiness_503_direct",
+  "context": [
+    "The backend runs in Docker Compose.",
+    "The test calls the backend directly through its published port.",
+    "The FastAPI /ready handler checks the database.",
+    "The handler returns HTTP 503 when the database check fails."
+  ],
+  "evidence": [
+    "GET /ready returned HTTP 503."
+  ],
+  "missing_evidence": [
+    "Backend logs",
+    "Database container status"
+  ],
+  "review_criteria": [
+    "Recognizes that the readiness handler reported a failed database check.",
+    "Does not claim the database is definitely stopped.",
+    "Does not explain the received HTTP response solely by saying the backend process was stopped.",
+    "Keeps possible causes explicitly uncertain.",
+    "Recommends checks appropriate for Docker Compose."
+    ,"Describes recommended checks as future actions, not as actions already performed."
+  ]
+}
