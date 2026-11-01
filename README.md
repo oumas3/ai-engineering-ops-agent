@@ -322,42 +322,145 @@ compares run IDs before displaying failed-test details.
 A valid status of `failed` reports a CI failure. A missing report means
 the application could not obtain the evidence. These are different cases.
 
-## Progress
+## Project status and roadmap
 
-- [x] Task 1: CI status retrieval, validation, and error handling
-- [x] Task 2: Failed-test retrieval and run-ID matching
-- [ ] Task 3: Mock log retrieval
-- [ ] Mock service-status tools
-- [ ] Custom MCP server and client
-- [ ] Stateful LangGraph workflow
-- [ ] LLM-driven structured tool calling
-- [ ] Harness permissions, retries, fallbacks, and timeouts
-- [ ] Persistence and human approval for write actions
-- [ ] Async FastAPI interface
-- [ ] Tracing and agent evaluation
-- [ ] Docker and automated CI
+The project currently runs a stateful engineering investigation against
+mock reports or evidence collected from a real local Docker environment.
 
-Tests are added alongside implementation. Work is completed and committed
-in small increments.
+LangGraph controls evidence collection through a custom MCP server.
+An optional Groq analysis step produces structured observations,
+hypotheses, recommended checks, and limitations. Issue creation requires
+permission and human approval.
 
-## Current limitations
+### Completed milestones
 
-- Uses local mock files, with no external service integrations.
-- Does not yet use an LLM, LangGraph, or MCP.
-- Does not diagnose root causes or recommend remediation.
-- Handles missing files and validation errors, but not every possible I/O error.
-- Dependency ranges are declared; an exact dependency lock is not yet included.on, and error handling
-- [x] Task 2: Failed-test retrieval and run-ID matching
-- [ ] Task 3: Mock log retrieval
-- [ ] Mock service-status tools
-- [ ] Custom MCP server and client
-- [ ] Stateful LangGraph workflow
-- [ ] LLM-driven structured tool calling
-- [ ] Harness permissions, retries, fallbacks, and timeouts
-- [ ] Persistence and human approval for write actions
-- [ ] Async FastAPI interface
-- [ ] Tracing and agent evaluation
-- [ ] Docker and automated CI
+- [x] **Part 1 — Project foundation and CI reports**
+  - Python environment, modular structure, and pytest.
+  - Pydantic validation for CI reports.
+  - Handling missing files and invalid report data.
+
+- [x] **Part 2 — Failed-test evidence**
+  - Retrieve and validate failed-test reports.
+  - Match report run IDs to the investigated CI run.
+  - Distinguish missing reports from reports with no failed tests.
+
+- [x] **Part 3 — Log collection**
+  - Read structured logs.
+  - Validate service and CI run identity.
+  - Preserve useful evidence when another report is unavailable.
+
+- [x] **Part 4 — Service health**
+  - Collect and validate service-status reports.
+  - Match service and environment before accepting evidence.
+
+- [x] **Part 5 — Custom MCP server and client**
+  - Expose CI, failed-test, log, and service-status tools.
+  - Discover and execute tools through an MCP client.
+  - Validate structured tool responses.
+
+- [x] **Part 6 — Stateful LangGraph investigation**
+  - Implement collection nodes and conditional routing.
+  - Store accepted evidence and collection errors in graph state.
+  - Test routing and graph execution.
+
+- [x] **Part 7 — Timeouts and retries**
+  - Apply configurable deadlines to read-tool requests.
+  - Retry timed-out reads with a bounded number of attempts.
+  - Record handled failures in investigation state.
+
+- [x] **Part 8 — Persistent investigations**
+  - Store checkpoints in SQLite.
+  - Inspect saved investigations without rerunning inference.
+  - Pause and resume unfinished workflows.
+  - Configure serialization for custom Pydantic models.
+
+- [x] **Part 9 — Permissions, approval, and local issue creation**
+  - Prepare an issue proposal from collected evidence.
+  - Require explicit permission and human approval before writing.
+  - Create local issue records.
+  - Use request IDs to prevent duplicate writes for repeated requests.
+
+- [x] **Part 10 — Real local engineering evidence**
+  - Run a FastAPI demo backend and PostgreSQL with Docker Compose.
+  - Exercise the backend readiness endpoint with integration tests.
+  - Convert pytest XML and container logs into validated reports.
+  - Probe service readiness and investigate a selected report run.
+
+- [x] **Part 11 — Structured LLM analysis**
+  - Integrate Groq through an asynchronous client.
+  - Build model input from collected investigation state.
+  - Validate structured analysis with Pydantic.
+  - Bound analysis execution with a timeout.
+  - Preserve evidence and produce a proposal when analysis fails.
+  - Label hypotheses as unverified and checks as not performed.
+  - Persist analysis alongside the investigation checkpoint.
+  - Test the integration using mocked model responses.
+
+### Remaining milestones
+
+- [ ] **Part 12 — Async FastAPI interface**
+  - Start investigations through HTTP.
+  - Retrieve investigation status, evidence, and proposals.
+  - Submit approval or rejection decisions.
+  - Manage MCP, model-client, and database lifecycles.
+  - Handle concurrent requests and test API behavior.
+
+- [ ] **Part 12B — Minimal browser interface**
+  - Provide a form to start an investigation.
+  - Display progress, evidence, analysis, and collection errors.
+  - Present the exact issue proposal for approval or rejection.
+  - Keep permission enforcement in the backend.
+
+- [ ] **Part 13 — Agent harness and advanced workflows**
+  - Add bounded model-driven selection of permitted read tools.
+  - Validate tool arguments and enforce execution budgets.
+  - Develop routing, retry, and fallback policies.
+  - Extend MCP capabilities where needed.
+  - Preserve approval requirements for write actions.
+
+- [ ] **Part 14 — Tracing and observability**
+  - Correlate investigations, node executions, and tool calls.
+  - Record latency, failures, model usage, and retry attempts.
+  - Make failed or slow investigations easier to diagnose.
+
+- [ ] **Part 15 — Agent evaluation**
+  - Build repeatable investigation scenarios.
+  - Evaluate evidence grounding and unsupported claims.
+  - Measure task completion and permission compliance.
+  - Compare prompts and models using recorded results.
+
+- [ ] **Part 16 — Packaging, CI, and reproducible demo**
+  - Containerize the agent and its API.
+  - Automate tests and project checks in CI.
+  - Document configuration, architecture, and execution.
+  - Provide a reproducible end-to-end demonstration.
+
+### Optional extensions
+
+- [ ] Connect real engineering services, such as GitHub, through MCP.
+- [ ] Extend issue operations beyond local storage.
+- [ ] Compare additional model providers.
+
+## Current validation and limitations
+
+The latest local unit and integration test suite completed with
+**62 passing tests**. The Docker-dependent backend checks are run separately.
+
+Manual checks also confirmed that an investigation can generate structured
+analysis, include it in a proposal, and restore it from a SQLite checkpoint.
+
+These checks verify implemented behavior; they do not establish diagnostic
+accuracy or production reliability.
+
+- Evidence collection currently follows a predefined graph.
+  Model-driven tool selection is planned.
+- Pydantic validates structure and types, not factual correctness.
+- Model hypotheses may be unsupported or incorrect and require review.
+- Automated detection of reasoning contradictions is not implemented yet.
+- Recommended checks are suggestions, not automatically executed actions.
+- Issue creation currently writes local JSON records.
+- The agent API, browser interface, tracing, and systematic evaluation
+  remain planned work.
 
 Tests are added alongside implementation. Work is completed and committed
 in small increments.
