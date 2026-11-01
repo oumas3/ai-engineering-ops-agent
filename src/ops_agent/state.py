@@ -9,6 +9,7 @@ from ops_agent.models import (
     ServiceStatus,
 )
 from uuid import uuid4
+from ops_agent.models import InvestigationAnalysis
 
 
 class InvestigationState(TypedDict):
@@ -23,6 +24,7 @@ class InvestigationState(TypedDict):
     approval_decision: Literal["approved", "rejected"] | None
     issue_request_id: str
     created_issue: CreatedIssue | None
+    analysis: InvestigationAnalysis | None
 
 
 def create_initial_state(
@@ -41,6 +43,6 @@ def create_initial_state(
         "approval_decision": None,
         "issue_request_id": str(uuid4()),
         "created_issue": None,
-
+        "analysis": None,
         
     }

@@ -20,6 +20,9 @@ from pathlib import Path
 from uuid import UUID
 
 from ops_agent.tools import create_issue
+from groq import APIError, APITimeoutError, AsyncGroq
+
+from ops_agent.analysis import analyse_investigation
 
 class InvestigationNodes:
     def __init__(
@@ -364,3 +367,30 @@ class InvestigationNodes:
         )
 
         return {"created_issue": issue}
+
+
+class AnalysisNode:
+    def __init__(self, client: AsyncGroq) -> None:
+        self.client = client
+
+    async def collect_analysis(
+        self,
+        state: InvestigationState,
+    ) -> dict[str, object]:
+        try:
+            analysis = await analyse_investigation(state, self.client)
+        except (TimeoutError, APITimeoutError):
+            message = "Analysis request timed out."
+        except ValidationError:
+            message = "Analysis returned invalid data."
+        except ValueError:
+            message = "Analysis returned an incomplete or empty response."
+        except APIError:
+            message = "Analysis API request failed."
+        else:
+            return {"analysis": analysis}
+
+        return {
+            "analysis": None,
+            "errors": state["errors"] + [message],
+        }

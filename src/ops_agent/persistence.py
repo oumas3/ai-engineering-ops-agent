@@ -12,5 +12,6 @@ def create_serializer() -> JsonPlusSerializer:
             ("ops_agent.models", "ServiceStatus"),
             ("ops_agent.models", "IssueProposal"),
             ("ops_agent.models", "CreatedIssue"),
+            ("ops_agent.models", "InvestigationAnalysis"),
         ]
     )
