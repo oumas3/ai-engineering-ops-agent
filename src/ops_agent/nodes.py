@@ -20,9 +20,8 @@ from pathlib import Path
 from uuid import UUID
 
 from ops_agent.tools import create_issue
-from groq import APIError, APITimeoutError, AsyncGroq
-
 from ops_agent.analysis import analyse_investigation
+from groq import APIError, APIStatusError, APITimeoutError, AsyncGroq
 
 class InvestigationNodes:
     def __init__(
@@ -385,8 +384,19 @@ class AnalysisNode:
             message = "Analysis returned invalid data."
         except ValueError:
             message = "Analysis returned an incomplete or empty response."
-        except APIError:
-            message = "Analysis API request failed."
+        except APIStatusError as error:
+            message = (
+                f"Analysis API request failed: "
+                f"HTTP {error.status_code} ({type(error).__name__})."
+            )
+
+            body = error.body
+            if isinstance(body, dict):
+                details = body.get("error", body)
+                if isinstance(details, dict):
+                    print("Groq error code:", details.get("code"))
+                    print("Groq error message:", details.get("message"))
+        
         else:
             return {"analysis": analysis}
 

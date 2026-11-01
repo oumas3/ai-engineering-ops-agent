@@ -61,6 +61,11 @@ async def analyse_investigation(
                         "Do not claim that suggested checks were performed. "
                         "Do not claim that the root cause is established "
                         "unless the evidence establishes it. "
+                        "Always include all four fields: observations, hypotheses, "
+                        "recommended_checks, and limitations. "
+                        "Every field must contain a list of strings. "
+                        "If a field has no items, return an empty list. "
+                        "Never omit a field. "
                         "Keep every item concise."
                     ),
                 },

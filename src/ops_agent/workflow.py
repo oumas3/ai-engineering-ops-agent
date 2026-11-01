@@ -9,10 +9,13 @@ from unittest.mock import AsyncMock
 
 from typing import Literal
 from ops_agent.nodes import InvestigationNodes
-from ops_agent.state import InvestigationState
+from ops_agent.state import InvestigationState, create_initial_state
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from ops_agent.models import AgentPermissions
 
+from groq import AsyncGroq
+
+from ops_agent.nodes import AnalysisNode, InvestigationNodes
 
 def route_after_approval(
     state: InvestigationState,
@@ -27,6 +30,7 @@ def build_graph(
     checkpointer: BaseCheckpointSaver | None = None,
     interrupt_before: list[str] | None = None,
     permissions: AgentPermissions | None = None,
+    llm_client: AsyncGroq | None = None,
 ) -> CompiledStateGraph:
     nodes = InvestigationNodes(
         client,
@@ -34,6 +38,14 @@ def build_graph(
         permissions=permissions,
     )
     builder = StateGraph(InvestigationState)
+
+    
+    if llm_client is not None:
+        analysis_node = AnalysisNode(llm_client)
+        builder.add_node(
+            "collect_analysis",
+            analysis_node.collect_analysis,
+        )
 
     builder.add_node("collect_ci", nodes.collect_ci)
     builder.add_node("collect_failed_tests", nodes.collect_failed_tests)
@@ -53,7 +65,11 @@ def build_graph(
 
     builder.add_edge("collect_failed_tests", "collect_logs")
     builder.add_edge("collect_logs", "collect_service_status")
-    builder.add_edge("collect_service_status", "prepare_issue")
+    if llm_client is not None:
+        builder.add_edge("collect_service_status", "collect_analysis")
+        builder.add_edge("collect_analysis", "prepare_issue")
+    else:
+            builder.add_edge("collect_service_status", "prepare_issue")
     if nodes.permissions.can_create_issue:
         if checkpointer is None:
             raise ValueError("Approval requires a checkpointer.")

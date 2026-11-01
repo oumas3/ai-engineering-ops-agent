@@ -12,6 +12,10 @@ from ops_agent import mcp_server
 from ops_agent.models import CIResult
 from ops_agent.state import create_initial_state
 from ops_agent.workflow import build_graph, route_after_ci
+from unittest.mock import AsyncMock
+
+from groq import AsyncGroq
+from ops_agent.models import InvestigationAnalysis
 
 def test_failed_ci_routes_to_failed_tests() -> None:
     state = create_initial_state("backend", "staging")
@@ -82,10 +86,24 @@ def test_graph_collects_failed_tests(
         encoding="utf-8",
     )
     monkeypatch.setattr(mcp_server, "DATA_DIR", tmp_path)
+    expected_analysis = InvestigationAnalysis(
+        observations=["CI run 42 failed."],
+        hypotheses=[],
+        recommended_checks=["Inspect database connectivity."],
+        limitations=["The root cause is not established."],
+    )
+
+    analyse = AsyncMock(return_value=expected_analysis)
+    monkeypatch.setattr(
+        "ops_agent.nodes.analyse_investigation",
+        analyse,
+    )
+
+    llm_client = AsyncMock(spec=AsyncGroq)
 
     async def check() -> None:
         async with Client(mcp_server.server) as client:
-            graph = build_graph(client)
+            graph = build_graph(client, llm_client=llm_client)
             state = create_initial_state("backend", "staging")
             final_state = await graph.ainvoke(state)
 
@@ -99,7 +117,14 @@ def test_graph_collects_failed_tests(
         assert final_state["logs"].run_id == 42
         assert final_state["logs"].service == "backend"
         assert final_state["logs"].entries[0].message == "Database connection timed out."
+        assert final_state["analysis"] == expected_analysis
+        analyse.assert_awaited_once()
 
+        analysed_state = analyse.call_args.args[0]
+        assert analysed_state["ci"] is not None
+        assert analysed_state["failed_tests"] is not None
+        assert analysed_state["logs"] is not None
+        assert analysed_state["service_status"] is not None
         health = final_state["service_status"]
         assert health is not None
         assert health.service == "backend"

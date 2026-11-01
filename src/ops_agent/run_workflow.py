@@ -11,6 +11,10 @@ import aiosqlite
 from ops_agent.persistence import create_serializer
 from ops_agent.models import AgentPermissions
 from langgraph.types import Command
+import os
+from contextlib import AsyncExitStack
+
+from groq import AsyncGroq
 
 async def main() -> None:
     parser = argparse.ArgumentParser()
@@ -55,8 +59,16 @@ async def main() -> None:
         "--report-run",
         help="Select a generated local report folder by its UUID.",
     )
+    parser.add_argument(
+        "--analyse",
+        action="store_true",
+        help="Analyse collected evidence using Groq.",
+    )
+    
     args = parser.parse_args()
-
+    if args.analyse and not os.environ.get("GROQ_API_KEY"):
+        parser.error("--analyse requires GROQ_API_KEY in this terminal.")
+    
     if args.pause_before_tests and (
         args.inspect or args.resume or args.approve or args.reject
     ):
@@ -68,6 +80,7 @@ async def main() -> None:
         parser.error(
             "Include --allow-create-issue to load the approval workflow."
         )
+   
     serializer = create_serializer()
     src_dir = Path(__file__).resolve().parents[1]
     server_env = {"PYTHONPATH": str(src_dir)}
@@ -79,7 +92,7 @@ async def main() -> None:
         args=["-m", "ops_agent.mcp_server"],
         env=server_env,
     )
-
+   
     environment = "local" if args.report_run is not None else "staging"
     initial_state = create_initial_state("backend", environment)
    
@@ -98,7 +111,15 @@ async def main() -> None:
             connection,
             serde=serializer,
         )
-        async with Client(params) as client:
+        async with Client(params) as client, AsyncExitStack() as stack:
+            llm_client = None
+            if args.analyse:
+                llm_client = await stack.enter_async_context(
+                    AsyncGroq(
+                        api_key=os.environ["GROQ_API_KEY"],
+                        max_retries=0,
+                    )
+                )
             graph = build_graph(
                 client,
                 checkpointer=checkpointer,
@@ -110,6 +131,7 @@ async def main() -> None:
                 permissions=AgentPermissions(
                 can_create_issue=args.allow_create_issue,
                 ),
+                llm_client=llm_client,
             )
             if args.inspect or args.resume or args.approve or args.reject:
                 snapshot = await graph.aget_state(config)
@@ -178,6 +200,11 @@ async def main() -> None:
     for error in final_state["errors"]:
         print(f"Investigation error: {error}")
 
+    analysis = final_state.get("analysis")
+        
+    if analysis is not None:
+                print("\nModel analysis — review before acting:")
+                print(analysis.model_dump_json(indent=2))
     proposal = final_state.get("issue_proposal")
 
     if proposal is not None:
