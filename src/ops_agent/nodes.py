@@ -275,6 +275,20 @@ class InvestigationNodes:
                 f"Service health: {health.status} "
                 f"({health.environment})"
             )
+        analysis = state.get("analysis")
+
+        if analysis is not None:
+            lines.append("")
+            lines.append("Model analysis — requires human review:")
+
+            for hypothesis in analysis.hypotheses:
+                lines.append(f"Unverified hypothesis: {hypothesis}")
+
+            for check in analysis.recommended_checks:
+                lines.append(f"Suggested check (not performed): {check}")
+
+            for limitation in analysis.limitations:
+                lines.append(f"Analysis limitation: {limitation}")
 
         for error in state["errors"]:
             lines.append(f"Collection limitation: {error}")

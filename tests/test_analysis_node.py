@@ -7,6 +7,7 @@ from groq import AsyncGroq
 from ops_agent.models import CIResult, InvestigationAnalysis
 from ops_agent.nodes import AnalysisNode
 from ops_agent.state import create_initial_state
+from ops_agent.nodes import AnalysisNode, InvestigationNodes
 
 
 def test_node_returns_analysis(
@@ -78,3 +79,38 @@ def test_node_preserves_evidence_on_failure(
     assert "ci" not in update
     assert state["ci"] is ci
     assert state["errors"] == ["Logs could not be collected."]
+
+def test_proposal_labels_model_suggestions() -> None:
+    state = create_initial_state("backend", "local")
+    state["ci"] = CIResult(
+        run_id=42,
+        service="backend",
+        status="failed",
+    )
+    state["analysis"] = InvestigationAnalysis(
+        observations=["CI run 42 failed."],
+        hypotheses=["The database may be unreachable."],
+        recommended_checks=["Inspect database logs."],
+        limitations=["Database status was not collected."],
+    )
+
+    nodes = InvestigationNodes(AsyncMock())
+    update = nodes.prepare_issue(state)
+    proposal = update["issue_proposal"]
+
+    assert proposal is not None
+    assert (
+        "Unverified hypothesis: The database may be unreachable."
+        in proposal.description
+    )
+    assert (
+        "Suggested check (not performed): Inspect database logs."
+        in proposal.description
+    )
+    assert (
+        "Analysis limitation: Database status was not collected."
+        in proposal.description
+    )
+    assert "Root cause is not established." in proposal.description
+    assert state["approval_decision"] is None
+    assert state["created_issue"] is None
