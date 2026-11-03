@@ -33,9 +33,7 @@ def test_large_run_id_serializes_as_string() -> None:
     )
 
     payload = response.model_dump(mode="json")
-
     assert payload["ci"]["run_id"] == str(run_id)
-    
 def test_start_request_accepts_report_folder_id() -> None:
     request = StartInvestigationRequest.model_validate({"report_run": RUN_ID})
 
