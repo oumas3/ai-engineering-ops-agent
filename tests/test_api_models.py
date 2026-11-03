@@ -3,9 +3,12 @@ from uuid import UUID
 import pytest
 from pydantic import ValidationError
 
-from ops_agent.api_models import  CIResultResponse, InvestigationDecisionRequest, InvestigationResultResponse, StartInvestigationRequest
-InvestigationResultResponse, InvestigationDecisionRequest, StartInvestigationRequest
-
+from ops_agent.api_models import (
+    CIResultResponse,
+    InvestigationDecisionRequest,
+    InvestigationResultResponse,
+    StartInvestigationRequest,
+)
 
 RUN_ID = "94f6c0cdef5d456d9c708b84d986df24"
 
@@ -32,6 +35,7 @@ def test_large_run_id_serializes_as_string() -> None:
     payload = response.model_dump(mode="json")
 
     assert payload["ci"]["run_id"] == str(run_id)
+    
 def test_start_request_accepts_report_folder_id() -> None:
     request = StartInvestigationRequest.model_validate({"report_run": RUN_ID})
 
