@@ -434,7 +434,14 @@ permission and human approval.
   - Automate tests and project checks in CI.
   - Document configuration, architecture, and execution.
   - Provide a reproducible end-to-end demonstration.
+## FastAPI runtime
 
+The investigation workflow can also run as a local FastAPI service.
+
+Install dependencies:
+
+```powershell
+python -m pip install -r requirements.txt
 ### Optional extensions
 
 - [ ] Connect real engineering services, such as GitHub, through MCP.

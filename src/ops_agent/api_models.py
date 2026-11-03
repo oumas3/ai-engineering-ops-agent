@@ -1,36 +1,86 @@
+from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, StrictBool
-from typing import Literal
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    PlainSerializer,
+    StrictBool,
+)
+
+from ops_agent.models import (
+    FailedTest,
+    InvestigationAnalysis,
+    LogEntry,
+    ServiceStatus,
+)
+
+
+SafeRunId = Annotated[
+    int,
+    PlainSerializer(
+        lambda value: str(value),
+        return_type=str,
+        when_used="json",
+    ),
+]
+
+
 class StartInvestigationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     report_run: UUID
     analyse: StrictBool = False
 
+
 class StartInvestigationResponse(BaseModel):
     investigation_id: UUID
 
-from ops_agent.models import (
-    CIResult,
-    FailedTestsReport,
-    InvestigationAnalysis,
-    IssueProposal,
-    LogsReport,
-    ServiceStatus,
-)
+
+class CIResultResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    run_id: SafeRunId
+    service: str
+    status: Literal["passed", "failed", "running"]
+
+
+class FailedTestsReportResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    run_id: SafeRunId
+    tests: list[FailedTest]
+
+
+class LogsReportResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    run_id: SafeRunId
+    service: str
+    entries: list[LogEntry]
+
+
+class IssueProposalResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    run_id: SafeRunId
+    service: str
+    title: str
+    description: str
+
 
 class InvestigationResultResponse(BaseModel):
     investigation_id: UUID
     service: str
     environment: str
-    ci: CIResult | None
-    failed_tests: FailedTestsReport | None
-    logs: LogsReport | None
+    ci: CIResultResponse | None
+    failed_tests: FailedTestsReportResponse | None
+    logs: LogsReportResponse | None
     service_status: ServiceStatus | None
     analysis: InvestigationAnalysis | None
-    issue_proposal: IssueProposal | None
+    issue_proposal: IssueProposalResponse | None
     errors: list[str]
+
 
 class InvestigationDecisionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
