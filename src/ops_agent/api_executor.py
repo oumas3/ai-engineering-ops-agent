@@ -15,7 +15,11 @@ from ops_agent.state import create_initial_state
 from ops_agent.workflow import build_graph
 
 
-async def execute_investigation(job: InvestigationJob) -> None:
+async def execute_investigation(
+    job: InvestigationJob,
+    *,
+    allow_create_issue: bool = False,
+) -> None:
     src_dir = Path(__file__).resolve().parents[1]
     runtime_dir = src_dir.parent / "runtime"
     runtime_dir.mkdir(parents=True, exist_ok=True)
@@ -46,7 +50,7 @@ async def execute_investigation(job: InvestigationJob) -> None:
             mcp_client,
             checkpointer=checkpointer,
             llm_client=llm_client,
-            permissions=AgentPermissions(can_create_issue=False),
+            permissions=AgentPermissions(can_create_issue=allow_create_issue),
         )
 
         await graph.ainvoke(

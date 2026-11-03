@@ -3,7 +3,7 @@ from uuid import UUID
 import pytest
 from pydantic import ValidationError
 
-from ops_agent.api_models import StartInvestigationRequest
+from ops_agent.api_models import InvestigationDecisionRequest, StartInvestigationRequest
 
 
 RUN_ID = "94f6c0cdef5d456d9c708b84d986df24"
@@ -34,3 +34,22 @@ def test_start_request_rejects_invalid_input(
         StartInvestigationRequest.model_validate(payload)
 
     assert error.value.errors()[0]["loc"] == (field,)
+
+@pytest.mark.parametrize("decision", ["approved", "rejected"])
+def test_accepts_explicit_decision(decision: str) -> None:
+    request = InvestigationDecisionRequest.model_validate(
+        {"decision": decision}
+    )
+    assert request.decision == decision
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"decision": "maybe"},
+        {"decision": "approved", "can_create_issue": True},
+    ],
+)
+def test_rejects_invalid_decision_request(payload: dict[str, object]) -> None:
+    with pytest.raises(ValidationError):
+        InvestigationDecisionRequest.model_validate(payload)
