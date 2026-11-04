@@ -32,6 +32,26 @@ def test_start_returns_id_from_runner() -> None:
     assert runner.await_args.args[0].report_run == UUID(report_run)
 
 
+
+def test_start_rejects_analysis_without_groq_key(monkeypatch) -> None:
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+
+    runner = AsyncMock()
+
+    with TestClient(create_app(runner)) as client:
+        response = client.post(
+            "/investigations",
+            json={
+                "report_run": "94f6c0cdef5d456d9c708b84d986df24",
+                "analyse": True,
+            },
+        )
+
+    assert response.status_code == 400
+    assert "GROQ_API_KEY" in response.json()["detail"]
+
+    runner.assert_not_awaited()
+
 def test_invalid_report_never_reaches_runner() -> None:
     runner = AsyncMock()
 
@@ -65,7 +85,13 @@ def test_start_returns_404_for_missing_report(tmp_path: Path) -> None:
     assert response.status_code == 404
     assert runner.queue.empty()
 
-def test_start_queues_the_requested_report(tmp_path: Path) -> None:
+
+def test_start_queues_the_requested_report(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("GROQ_API_KEY", "test-only-dummy-key")
+
     runner = InvestigationRunner(tmp_path)
     report_run = UUID("94f6c0cd-ef5d-456d-9c70-8b84d986df24")
     (tmp_path / report_run.hex).mkdir()
@@ -77,11 +103,14 @@ def test_start_queues_the_requested_report(tmp_path: Path) -> None:
         )
 
     assert response.status_code == 202
+
     job = runner.queue.get_nowait()
 
     assert job.investigation_id == UUID(response.json()["investigation_id"])
     assert job.report_run == report_run
     assert job.analyse is True
+
+
 def test_get_investigation_returns_saved_result(monkeypatch) -> None:
     investigation_id = UUID("00000000-0000-4000-8000-000000000002")
 
@@ -147,3 +176,23 @@ def test_decision_endpoint_accepts_approval(monkeypatch) -> None:
         "approved",
         allow_create_issue=True,
     )
+
+
+def test_approval_status_without_pending_approval(monkeypatch) -> None:
+    investigation_id = UUID("00000000-0000-4000-8000-000000000020")
+
+    checker = AsyncMock(return_value=False)
+    monkeypatch.setattr("ops_agent.api.is_approval_pending", checker)
+    monkeypatch.delenv("OPS_ALLOW_CREATE_ISSUE", raising=False)
+
+    with TestClient(create_app(AsyncMock())) as client:
+        response = client.get(
+            f"/investigations/{investigation_id}/approval"
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "approval_pending": False,
+        "issue_creation_enabled": False,
+    }
+    checker.assert_awaited_once_with(investigation_id)

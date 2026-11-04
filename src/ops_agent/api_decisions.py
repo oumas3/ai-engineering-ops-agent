@@ -23,6 +23,40 @@ class NoPendingApproval(Exception):
     pass
 
 
+async def is_approval_pending(investigation_id: UUID) -> bool:
+    src_dir = Path(__file__).resolve().parents[1]
+    database = src_dir.parent / "runtime" / "checkpoints.sqlite"
+
+    if not database.is_file():
+        raise InvestigationNotFound("No saved investigation found.")
+
+    params = StdioServerParameters(
+        command=sys.executable,
+        args=["-m", "ops_agent.mcp_server"],
+        env={"PYTHONPATH": str(src_dir)},
+    )
+
+    async with aiosqlite.connect(str(database)) as connection:
+        saver = AsyncSqliteSaver(
+            connection,
+            serde=create_serializer(),
+        )
+
+        async with Client(params) as client:
+            graph = build_graph(
+                client,
+                checkpointer=saver,
+                permissions=AgentPermissions(can_create_issue=True),
+            )
+
+            try:
+                await require_pending_approval(graph, investigation_id)
+            except NoPendingApproval:
+                return False
+
+            return True
+
+
 async def require_pending_approval(
     graph: CompiledStateGraph,
     investigation_id: UUID,

@@ -5,7 +5,7 @@ from functools import partial
 import os
 from pathlib import Path
 from uuid import UUID
-
+from fastapi.responses import FileResponse
 from fastapi import FastAPI, HTTPException, Response, status
 
 from ops_agent.api_executor import execute_investigation
@@ -22,15 +22,15 @@ from ops_agent.api_decisions import (
     IssueCreationDisabled,
     NoPendingApproval,
     apply_decision,
+    is_approval_pending,
 )
-from ops_agent.api_models import InvestigationDecisionRequest
+from ops_agent.api_models import InvestigationDecisionRequest,ApprovalStatusResponse
 
 
 StartRunner = Callable[[StartInvestigationRequest], Awaitable[UUID]]
 
 
 def create_app(start_runner: StartRunner | None = None) -> FastAPI:
-    @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.allow_create_issue = (
             os.environ.get("OPS_ALLOW_CREATE_ISSUE") == "1"
@@ -66,6 +66,16 @@ def create_app(start_runner: StartRunner | None = None) -> FastAPI:
     async def start_investigation(
         request: StartInvestigationRequest,
     ) -> StartInvestigationResponse:
+
+        if request.analyse and not os.environ.get("GROQ_API_KEY"):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "AI analysis is unavailable. "
+                    "Disable AI analysis or configure GROQ_API_KEY."
+                ),
+            )
+
         try:
             investigation_id = await app.state.start_runner(request)
         except ReportRunNotFound as error:
@@ -98,6 +108,27 @@ def create_app(start_runner: StartRunner | None = None) -> FastAPI:
             )
 
         return result
+
+    @app.get(
+        "/investigations/{investigation_id}/approval",
+        response_model=ApprovalStatusResponse,
+    )
+    async def get_approval_status(
+        investigation_id: UUID,
+    ) -> ApprovalStatusResponse:
+        try:
+            pending = await is_approval_pending(investigation_id)
+        except InvestigationNotFound as error:
+            raise HTTPException(
+                status_code=404,
+                detail=str(error),
+            ) from error
+
+        return ApprovalStatusResponse(
+            approval_pending=pending,
+            issue_creation_enabled=app.state.allow_create_issue,
+        )
+
     @app.post(
         "/investigations/{investigation_id}/decision",
         status_code=status.HTTP_204_NO_CONTENT,
@@ -121,4 +152,10 @@ def create_app(start_runner: StartRunner | None = None) -> FastAPI:
             raise HTTPException(403, detail=str(error)) from error
 
         return Response(status_code=status.HTTP_204_NO_CONTENT)
+    
+    @app.get("/", include_in_schema=False)
+    async def home() -> FileResponse:
+        page = Path(__file__).resolve().parent / "web" / "index.html"
+        return FileResponse(page)
+
     return app

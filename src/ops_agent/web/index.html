@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Engineering Operations Agent</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 32px 16px; font-family: Arial, sans-serif; background: #f3f6fa; color: #1e293b; }
+    main { max-width: 850px; margin: auto; }
+    .panel { background: white; border: 1px solid #dce3ed; border-radius: 12px; padding: 24px; margin-bottom: 16px; }
+    h1 { margin: 0 0 8px; }
+    h2, h3 { margin-top: 0; }
+    h3 { font-size: 17px; }
+    .muted { color: #64748b; }
+    label { display: block; font-weight: 600; margin-bottom: 8px; }
+    input[type="text"] { display: block; width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 7px; font-size: 14px; }
+    .checkbox-row { display: flex; align-items: center; gap: 8px; margin: 20px 0; font-weight: normal; }
+    button { padding: 11px 18px; border: 0; border-radius: 7px; background: #164e91; color: white; cursor: pointer; }
+    button.secondary { background: #e8eef6; color: #1e293b; }
+    button:disabled { opacity: 0.55; cursor: not-allowed; }
+    .result-header, .decision-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+    .result-header { justify-content: space-between; }
+    .card { padding: 18px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 9px; margin-top: 12px; }
+    #approval-panel { border-color: #f59e0b; }
+    .card p { margin: 8px 0; }
+    code, pre, li, #message { overflow-wrap: anywhere; }
+    pre, li { white-space: pre-wrap; }
+    pre { font-family: inherit; line-height: 1.6; }
+    a { color: #164e91; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="panel">
+      <h1>Engineering Operations Agent</h1>
+      <p class="muted">Investigate CI failures and inspect engineering evidence.</p>
+      <form id="investigation-form">
+        <label for="report-run">Report run ID</label>
+        <input id="report-run" type="text" required value="8446db8b15b44d6faf077f7d31dc0ac2">
+        <label class="checkbox-row"><input id="analyse" type="checkbox"> Include optional AI analysis</label>
+        <button id="start-button" type="submit">Start investigation</button>
+      </form>
+      <p id="message" role="status" aria-live="polite"></p>
+    </section>
+
+    <section id="results" class="panel" hidden>
+      <div class="result-header">
+        <h2>Investigation evidence</h2>
+        <button id="refresh-button" class="secondary" type="button">Refresh evidence</button>
+      </div>
+      <p><strong>Investigation ID:</strong></p>
+      <code id="investigation-id"></code>
+      <p class="muted">This is the latest saved checkpoint, not necessarily the final investigation state.</p>
+      <p><a id="json-link" target="_blank" rel="noopener">View raw JSON</a></p>
+      <div id="cards"></div>
+      <section id="approval-panel" class="card" hidden>
+        <h3>Human approval</h3>
+        <p id="approval-message"></p>
+        <div id="decision-buttons" class="decision-actions" hidden>
+          <button id="reject-button" class="secondary" type="button">Reject</button>
+          <button id="approve-button" type="button">Approve issue creation</button>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    const form = document.getElementById("investigation-form");
+    const startButton = document.getElementById("start-button");
+    const refreshButton = document.getElementById("refresh-button");
+    const message = document.getElementById("message");
+    const results = document.getElementById("results");
+    const cards = document.getElementById("cards");
+    const approvalPanel = document.getElementById("approval-panel");
+    const approvalMessage = document.getElementById("approval-message");
+    const decisionButtons = document.getElementById("decision-buttons");
+    const approveButton = document.getElementById("approve-button");
+    const rejectButton = document.getElementById("reject-button");
+    let activeId = null;
+    let decisionInProgress = false;
+
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    function addText(parent, tag, value) {
+      const node = document.createElement(tag);
+      node.textContent = String(value);
+      parent.appendChild(node);
+      return node;
+    }
+
+    function addCard(title) {
+      const card = document.createElement("section");
+      card.className = "card";
+      addText(card, "h3", title);
+      cards.appendChild(card);
+      return card;
+    }
+
+    function addField(parent, label, value) {
+      const p = document.createElement("p");
+      addText(p, "strong", label + ": ");
+      p.appendChild(document.createTextNode(value == null ? "Not available" : String(value)));
+      parent.appendChild(p);
+    }
+
+    function addList(parent, items) {
+      if (!Array.isArray(items) || items.length === 0) {
+        addText(parent, "p", "None available.");
+        return;
+      }
+      const list = document.createElement("ul");
+      for (const item of items) addText(list, "li", item);
+      parent.appendChild(list);
+    }
+
+    function renderInvestigation(data) {
+      cards.replaceChildren();
+      const overview = addCard("Overview");
+      addField(overview, "Service", data.service);
+      addField(overview, "Environment", data.environment);
+      addField(overview, "CI status", data.ci?.status);
+      addField(overview, "CI run ID", data.ci?.run_id);
+      addField(overview, "Service health", data.service_status?.status);
+
+      addList(addCard("Failed tests"), data.failed_tests?.tests?.map(
+        (test) => `${test.name}\n${test.message}`
+      ));
+      addList(addCard("Application logs"), data.logs?.entries?.map(
+        (entry) => `[${entry.level}] ${entry.message}`
+      ));
+
+      const analysis = addCard("AI analysis");
+      if (data.analysis) {
+        for (const [heading, key] of [
+          ["Observations", "observations"],
+          ["Hypotheses", "hypotheses"],
+          ["Recommended checks", "recommended_checks"],
+          ["Limitations", "limitations"]
+        ]) {
+          addText(analysis, "h4", heading);
+          addList(analysis, data.analysis[key]);
+        }
+      } else {
+        addText(analysis, "p", "Not requested or not available.");
+      }
+
+      const proposal = addCard("Issue proposal");
+      if (data.issue_proposal) {
+        addText(proposal, "h4", data.issue_proposal.title);
+        addText(proposal, "pre", data.issue_proposal.description);
+        addText(proposal, "p", "Draft only. Approval status is checked separately.");
+      } else {
+        addText(proposal, "p", "No issue proposal available.");
+      }
+      addList(addCard("Collection errors"), data.errors);
+      results.hidden = false;
+    }
+
+    async function getSnapshot(id) {
+      const response = await fetch(`/investigations/${encodeURIComponent(id)}`, { cache: "no-store" });
+      if (response.status === 404) return null;
+      const data = await response.json();
+      if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : `HTTP ${response.status}`);
+      return data;
+    }
+
+    async function refreshApproval(id) {
+      if (!id || id !== activeId) return;
+      approvalPanel.hidden = true;
+      decisionButtons.hidden = true;
+      const response = await fetch(`/investigations/${encodeURIComponent(id)}/approval`, { cache: "no-store" });
+      if (response.status === 404) return;
+      const data = await response.json();
+      if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : `Approval check failed: HTTP ${response.status}`);
+      if (id !== activeId || !data.approval_pending) return;
+      approvalPanel.hidden = false;
+      if (!data.issue_creation_enabled) {
+        approvalMessage.textContent = "Approval is pending, but issue creation is disabled on the server.";
+        return;
+      }
+      approvalMessage.textContent = "The agent is waiting for your decision. Review the proposal before continuing.";
+      decisionButtons.hidden = false;
+    }
+
+    async function loadEvidence(id) {
+      const snapshot = await getSnapshot(id);
+      if (id !== activeId) return false;
+      if (!snapshot) return false;
+      renderInvestigation(snapshot);
+      await refreshApproval(id);
+      return true;
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      startButton.disabled = true;
+      results.hidden = true;
+      cards.replaceChildren();
+      approvalPanel.hidden = true;
+      decisionButtons.hidden = true;
+      activeId = null;
+      message.textContent = "Submitting investigation...";
+      const reportRun = document.getElementById("report-run").value.trim();
+      const analyse = document.getElementById("analyse").checked;
+      try {
+        const response = await fetch("/investigations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ report_run: reportRun, analyse })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : `HTTP ${response.status}`);
+        const id = data.investigation_id;
+        activeId = id;
+        document.getElementById("investigation-id").textContent = id;
+        document.getElementById("json-link").href = `/investigations/${encodeURIComponent(id)}`;
+        results.hidden = false;
+        message.textContent = "Accepted. Waiting for saved evidence...";
+        for (let attempt = 0; attempt < 20; attempt++) {
+          if (id !== activeId) return;
+          if (await loadEvidence(id)) {
+            message.textContent = "Saved evidence loaded. Use Refresh evidence for updates.";
+            return;
+          }
+          await sleep(1500);
+        }
+        message.textContent = "No checkpoint found yet. Check the Uvicorn terminal or refresh evidence.";
+      } catch (error) {
+        message.textContent = "Error: " + error.message;
+      } finally {
+        startButton.disabled = false;
+      }
+    });
+
+    refreshButton.addEventListener("click", async () => {
+      if (!activeId) return;
+      const id = activeId;
+      refreshButton.disabled = true;
+      try {
+        if (await loadEvidence(id)) message.textContent = "Latest saved evidence loaded.";
+        else message.textContent = "No saved checkpoint yet.";
+      } catch (error) {
+        message.textContent = "Error: " + error.message;
+      } finally {
+        refreshButton.disabled = false;
+      }
+    });
+
+    async function submitDecision(decision) {
+      if (!activeId || decisionInProgress || decisionButtons.hidden) return;
+      if (decision === "approved" && !window.confirm(
+        "Approve creation of a local issue JSON file?"
+      )) return;
+      const id = activeId;
+      decisionInProgress = true;
+      approveButton.disabled = true;
+      rejectButton.disabled = true;
+      try {
+        // Recheck the server immediately before sending a write decision.
+        const statusResponse = await fetch(`/investigations/${encodeURIComponent(id)}/approval`, { cache: "no-store" });
+        if (!statusResponse.ok) throw new Error(`Approval check failed: HTTP ${statusResponse.status}`);
+        const status = await statusResponse.json();
+        if (!status.approval_pending || !status.issue_creation_enabled) {
+          throw new Error("This investigation is not currently awaiting an enabled approval.");
+        }
+        const response = await fetch(`/investigations/${encodeURIComponent(id)}/decision`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ decision })
+        });
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}));
+          throw new Error(typeof error.detail === "string" ? error.detail : `HTTP ${response.status}`);
+        }
+        message.textContent = decision === "approved"
+          ? "Approval accepted. Check runtime/issues/ for the local issue record."
+          : "Rejection accepted. No issue should be created for this decision.";
+        await loadEvidence(id);
+      } catch (error) {
+        message.textContent = "Decision error: " + error.message;
+        try { await refreshApproval(id); } catch { decisionButtons.hidden = true; }
+      } finally {
+        decisionInProgress = false;
+        approveButton.disabled = false;
+        rejectButton.disabled = false;
+      }
+    }
+
+    approveButton.addEventListener("click", () => submitDecision("approved"));
+    rejectButton.addEventListener("click", () => submitDecision("rejected"));
+  </script>
+</body>
+</html>
