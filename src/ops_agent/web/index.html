@@ -1,62 +1,187 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Engineering Operations Agent</title>
+  <meta name="theme-color" content="#0d141a">
+  <title>Ops Agent | CI investigations</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0d141a;
+      --surface: #151f27;
+      --surface2: #19252e;
+      --line: #293842;
+      --text: #f3f7f6;
+      --muted: #9bacb6;
+      --soft: #738893;
+      --accent: #7be5d4;
+      --accent-strong: #91f0df;
+      --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    }
     * { box-sizing: border-box; }
-    body { margin: 0; padding: 32px 16px; font-family: Arial, sans-serif; background: #f3f6fa; color: #1e293b; }
-    main { max-width: 850px; margin: auto; }
-    .panel { background: white; border: 1px solid #dce3ed; border-radius: 12px; padding: 24px; margin-bottom: 16px; }
-    h1 { margin: 0 0 8px; }
-    h2, h3 { margin-top: 0; }
-    h3 { font-size: 17px; }
-    .muted { color: #64748b; }
-    label { display: block; font-weight: 600; margin-bottom: 8px; }
-    input[type="text"] { display: block; width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 7px; font-size: 14px; }
-    .checkbox-row { display: flex; align-items: center; gap: 8px; margin: 20px 0; font-weight: normal; }
-    button { padding: 11px 18px; border: 0; border-radius: 7px; background: #164e91; color: white; cursor: pointer; }
-    button.secondary { background: #e8eef6; color: #1e293b; }
-    button:disabled { opacity: 0.55; cursor: not-allowed; }
-    .result-header, .decision-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
-    .result-header { justify-content: space-between; }
-    .card { padding: 18px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 9px; margin-top: 12px; }
-    #approval-panel { border-color: #f59e0b; }
-    .card p { margin: 8px 0; }
-    code, pre, li, #message { overflow-wrap: anywhere; }
-    pre, li { white-space: pre-wrap; }
-    pre { font-family: inherit; line-height: 1.6; }
-    a { color: #164e91; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font-family: "DM Sans", "Segoe UI", Arial, sans-serif;
+      font-size: 14px; line-height: 1.6; -webkit-font-smoothing: antialiased;
+    }
+    button, input { font: inherit; }
+    button, a, input { -webkit-tap-highlight-color: transparent; }
+    button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
     [hidden] { display: none !important; }
+    .container { max-width: 1000px; margin: 0 auto; padding: 0 28px; }
+
+    .site-header { border-bottom: 1px solid #233039; }
+    .site-header .container { display: flex; min-height: 72px; align-items: center; justify-content: space-between; gap: 20px; }
+    .brand { display: inline-flex; align-items: center; gap: 12px; color: var(--text); text-decoration: none; font-weight: 800; font-size: 17px; letter-spacing: -.055em; }
+    .brand-mark { position: relative; width: 27px; height: 27px; display: inline-flex; align-items: center; justify-content: center; border-radius: 9px; background: var(--accent); color: var(--bg); font-size: 16px; line-height: 1; font-weight: 800; letter-spacing: -.1em; }
+    .brand-mark::after { content: ''; width: 5px; height: 5px; border-radius: 100%; background: var(--bg); position: absolute; bottom: 5px; right: 5px; }
+    .brand span:last-child { padding-top: 1px; }
+    .header-note { display: flex; align-items: center; gap: 9px; color: var(--muted); font-size: 12px; font-weight: 500; }
+    .header-note::before { content: ''; width: 6px; height: 6px; background: var(--accent); border-radius: 50%; opacity: .85; }
+
+    .hero { padding: 76px 0 35px; max-width: 740px; }
+    .eyebrow { color: var(--accent); font-size: 11px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; margin: 0 0 14px; }
+    h1 { font-size: clamp(34px, 5.5vw, 54px); font-weight: 700; letter-spacing: -.065em; line-height: 1.12; margin: 0 0 15px; }
+    .hero-description { font-size: 16px; color: var(--muted); margin: 0; max-width: 560px; line-height: 1.7; }
+
+    .form-shell { margin-bottom: 54px; }
+    .investigation-form { padding: 24px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; }
+    .field-label { display: block; font-weight: 600; font-size: 13px; margin-bottom: 11px; color: var(--text); }
+    .form-row { display: flex; align-items: stretch; gap: 11px; }
+    .form-field { flex: 1; min-width: 0; }
+    #report-run { width: 100%; height: 49px; background: #0d171e; color: var(--text); border: 1px solid #354650; border-radius: 9px; padding: 12px 14px; font: 13px var(--mono); letter-spacing: -.025em; transition: border-color .18s; }
+    #report-run:focus { border-color: var(--accent); outline-offset: 1px; }
+    #report-run::placeholder { color: #70848f; }
+    button { border: 1px solid transparent; border-radius: 9px; min-height: 43px; padding: 10px 16px; cursor: pointer; font-size: 13px; font-weight: 700; transition: background .18s, border-color .18s, transform .18s; }
+    button:not(:disabled):active { transform: translateY(1px); }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    #start-button, #approve-button { background: var(--accent); color: #09221f; }
+    #start-button:hover:not(:disabled), #approve-button:hover:not(:disabled) { background: var(--accent-strong); }
+    #start-button { min-height: 49px; padding: 11px 21px; align-self: end; white-space: nowrap; }
+    button.secondary { background: transparent; color: var(--text); border-color: #465660; }
+    button.secondary:hover:not(:disabled) { background: #22303a; border-color: #5d707c; }
+    .checkbox-row { display: inline-flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; font-weight: 400; margin-top: 19px; cursor: pointer; user-select: none; }
+    .checkbox-row input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+    #message:not(:empty) { margin: 16px 0 0; color: #bcd5d3; background: #132a2a; border: 1px solid #285050; border-radius: 9px; padding: 12px 14px; font-size: 13px; overflow-wrap: anywhere; }
+
+    .results-section { margin-bottom: 72px; }
+    .result-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+    h2 { font-size: 22px; letter-spacing: -.04em; line-height: 1.25; font-weight: 700; margin: 0; }
+    #refresh-button { min-height: 38px; font-size: 12px; padding: 8px 13px; }
+    .investigation-meta { display: flex; align-items: center; justify-content: space-between; gap: 14px; border-bottom: 1px solid var(--line); padding-bottom: 17px; margin-bottom: 10px; flex-wrap: wrap; }
+    .meta-label { color: var(--soft); font-size: 11px; letter-spacing: .09em; font-weight: 700; text-transform: uppercase; margin: 0 0 4px; }
+    #investigation-id { display: block; color: #d7e5e4; font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
+    a { color: var(--accent); text-decoration: none; font-weight: 600; }
+    a:hover { text-decoration: underline; }
+    .checkpoint-note { color: var(--soft); font-size: 12px; margin: 8px 0 20px; }
+
+    #cards { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+    .card { border: 1px solid var(--line); border-radius: 13px; padding: 21px; background: var(--surface); min-width: 0; }
+    #cards > .card:first-child, #cards > .card:nth-child(5) { grid-column: 1 / -1; }
+    #cards > .card:nth-child(2), #cards > .card:nth-child(3) { min-height: 204px; }
+    h3 { font-size: 14px; font-weight: 700; letter-spacing: -.015em; margin: 0 0 15px; }
+    h4 { font-size: 13px; color: #e4eeee; font-weight: 600; margin: 18px 0 9px; }
+    .card h4:first-of-type { margin-top: 0; }
+    .card p { margin: 8px 0; color: var(--muted); overflow-wrap: anywhere; }
+    .card p strong { color: #e4efee; font-weight: 600; }
+    #cards > .card:first-child p { display: flex; flex-wrap: wrap; gap: 5px 12px; margin: 0; border-top: 1px solid #283640; padding: 10px 0; }
+    #cards > .card:first-child p strong { flex: 0 0 150px; color: var(--muted); }
+    #cards > .card:first-child p:first-of-type { border-top: 0; }
+    .card ul { margin: 0; padding: 0 0 0 17px; color: var(--muted); }
+    .card li { padding: 5px 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.7; }
+    #cards > .card:nth-child(2) li, #cards > .card:nth-child(3) li { font-family: var(--mono); font-size: 11.5px; line-height: 1.75; }
+    .card pre { padding: 16px; background: #0e181f; border: 1px solid #2e3d47; color: #bdccd1; font: 12px/1.75 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 360px; overflow: auto; border-radius: 9px; margin: 12px 0; }
+    .card code { font-family: var(--mono); }
+
+    #approval-panel { background: #152a29; border: 1px solid #3e7068; border-radius: 13px; padding: 23px; margin-top: 14px; }
+    .approval-head { display: flex; align-items: center; gap: 9px; margin-bottom: 8px; }
+    .approval-head .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+    #approval-panel h3 { margin: 0; font-size: 15px; }
+    #approval-panel p { color: #aecac6; font-size: 13px; margin: 0; }
+    .decision-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+    #reject-button { min-width: 110px; }
+    #approve-button { min-width: 190px; }
+    .site-footer { border-top: 1px solid #233039; color: var(--soft); padding: 21px 0 30px; font-size: 12px; }
+
+    @media (max-width: 720px) {
+      .container { padding: 0 18px; }
+      .site-header .container { min-height: 62px; }
+      .hero { padding: 58px 0 29px; }
+      .hero-description { font-size: 14px; }
+      .investigation-form { padding: 18px; }
+      .form-row { flex-direction: column; }
+      #start-button { align-self: stretch; }
+      #cards { grid-template-columns: 1fr; }
+      #cards > .card:first-child, #cards > .card:nth-child(5) { grid-column: auto; }
+      .card { padding: 18px; }
+      .form-shell { margin-bottom: 40px; }
+      .result-header { align-items: flex-start; }
+      .header-note { font-size: 11px; }
+    }
+    @media (max-width: 420px) {
+      .brand { font-size: 15px; }
+      .header-note { display: none; }
+      .result-header { flex-direction: column; align-items: stretch; }
+      .result-header button { align-self: flex-start; }
+      .decision-actions { display: grid; }
+      .decision-actions button { width: 100%; }
+      #cards > .card:first-child p strong { flex-basis: 100%; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
+    }
   </style>
 </head>
 <body>
-  <main>
-    <section class="panel">
-      <h1>Engineering Operations Agent</h1>
-      <p class="muted">Investigate CI failures and inspect engineering evidence.</p>
-      <form id="investigation-form">
-        <label for="report-run">Report run ID</label>
-        <input id="report-run" type="text" required value="8446db8b15b44d6faf077f7d31dc0ac2">
+  <header class="site-header">
+    <div class="container">
+      <a href="/" class="brand" aria-label="Ops Agent home">
+        <span class="brand-mark" aria-hidden="true">o</span>
+        <span>ops agent</span>
+      </a>
+      <span class="header-note">Local workspace</span>
+    </div>
+  </header>
+  <main class="container">
+    <div class="hero">
+      <p class="eyebrow">Engineering operations</p>
+      <h1>Investigate what failed.</h1>
+      <p class="hero-description">Review CI failures, inspect the evidence, and decide whether to create an issue.</p>
+    </div>
+    <section class="form-shell" aria-label="New investigation">
+      <form id="investigation-form" class="investigation-form">
+        <label class="field-label" for="report-run">Report run ID</label>
+        <div class="form-row">
+          <div class="form-field">
+            <input id="report-run" type="text" required value="8446db8b15b44d6faf077f7d31dc0ac2" placeholder="Paste a report run ID" autocomplete="off" spellcheck="false">
+          </div>
+          <button id="start-button" type="submit">Start investigation</button>
+        </div>
         <label class="checkbox-row"><input id="analyse" type="checkbox"> Include optional AI analysis</label>
-        <button id="start-button" type="submit">Start investigation</button>
+        <p id="message" role="status" aria-live="polite"></p>
       </form>
-      <p id="message" role="status" aria-live="polite"></p>
     </section>
-
-    <section id="results" class="panel" hidden>
+    <section id="results" class="results-section" aria-label="Investigation results" hidden>
       <div class="result-header">
-        <h2>Investigation evidence</h2>
+        <h2>Investigation results</h2>
         <button id="refresh-button" class="secondary" type="button">Refresh evidence</button>
       </div>
-      <p><strong>Investigation ID:</strong></p>
-      <code id="investigation-id"></code>
-      <p class="muted">This is the latest saved checkpoint, not necessarily the final investigation state.</p>
-      <p><a id="json-link" target="_blank" rel="noopener">View raw JSON</a></p>
+      <div class="investigation-meta">
+        <div>
+          <p class="meta-label">Investigation ID</p>
+          <code id="investigation-id"></code>
+        </div>
+        <a id="json-link" target="_blank" rel="noopener">View raw JSON ↗</a>
+      </div>
+      <p class="checkpoint-note">Showing the latest saved checkpoint. The investigation may still be running.</p>
       <div id="cards"></div>
-      <section id="approval-panel" class="card" hidden>
-        <h3>Human approval</h3>
+      <section id="approval-panel" hidden aria-label="Human approval">
+        <div class="approval-head"><span class="status-dot" aria-hidden="true"></span><h3>Human approval</h3></div>
         <p id="approval-message"></p>
         <div id="decision-buttons" class="decision-actions" hidden>
           <button id="reject-button" class="secondary" type="button">Reject</button>
@@ -65,9 +190,9 @@
       </section>
     </section>
   </main>
-
+  <footer class="site-footer"><div class="container">Ops Agent · Local development interface</div></footer>
   <script>
-    const form = document.getElementById("investigation-form");
+const form = document.getElementById("investigation-form");
     const startButton = document.getElementById("start-button");
     const refreshButton = document.getElementById("refresh-button");
     const message = document.getElementById("message");
