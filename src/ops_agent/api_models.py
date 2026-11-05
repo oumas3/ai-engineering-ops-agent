@@ -82,6 +82,10 @@ class InvestigationResultResponse(BaseModel):
     errors: list[str]
 
 
+class ApprovalStatusResponse(BaseModel):
+    approval_pending: bool
+    issue_creation_enabled: bool
+
 class InvestigationDecisionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
