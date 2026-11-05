@@ -34,7 +34,6 @@
     button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
     [hidden] { display: none !important; }
     .container { max-width: 1000px; margin: 0 auto; padding: 0 28px; }
-
     .site-header { border-bottom: 1px solid #233039; }
     .site-header .container { display: flex; min-height: 72px; align-items: center; justify-content: space-between; gap: 20px; }
     .brand { display: inline-flex; align-items: center; gap: 12px; color: var(--text); text-decoration: none; font-weight: 800; font-size: 17px; letter-spacing: -.055em; }
@@ -43,12 +42,10 @@
     .brand span:last-child { padding-top: 1px; }
     .header-note { display: flex; align-items: center; gap: 9px; color: var(--muted); font-size: 12px; font-weight: 500; }
     .header-note::before { content: ''; width: 6px; height: 6px; background: var(--accent); border-radius: 50%; opacity: .85; }
-
     .hero { padding: 76px 0 35px; max-width: 740px; }
     .eyebrow { color: var(--accent); font-size: 11px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; margin: 0 0 14px; }
     h1 { font-size: clamp(34px, 5.5vw, 54px); font-weight: 700; letter-spacing: -.065em; line-height: 1.12; margin: 0 0 15px; }
     .hero-description { font-size: 16px; color: var(--muted); margin: 0; max-width: 560px; line-height: 1.7; }
-
     .form-shell { margin-bottom: 54px; }
     .investigation-form { padding: 24px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; }
     .field-label { display: block; font-weight: 600; font-size: 13px; margin-bottom: 11px; color: var(--text); }
@@ -68,7 +65,6 @@
     .checkbox-row { display: inline-flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; font-weight: 400; margin-top: 19px; cursor: pointer; user-select: none; }
     .checkbox-row input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); cursor: pointer; }
     #message:not(:empty) { margin: 16px 0 0; color: #bcd5d3; background: #132a2a; border: 1px solid #285050; border-radius: 9px; padding: 12px 14px; font-size: 13px; overflow-wrap: anywhere; }
-
     .results-section { margin-bottom: 72px; }
     .result-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
     h2 { font-size: 22px; letter-spacing: -.04em; line-height: 1.25; font-weight: 700; margin: 0; }
@@ -79,7 +75,6 @@
     a { color: var(--accent); text-decoration: none; font-weight: 600; }
     a:hover { text-decoration: underline; }
     .checkpoint-note { color: var(--soft); font-size: 12px; margin: 8px 0 20px; }
-
     #cards { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
     .card { border: 1px solid var(--line); border-radius: 13px; padding: 21px; background: var(--surface); min-width: 0; }
     #cards > .card:first-child, #cards > .card:nth-child(5) { grid-column: 1 / -1; }
@@ -97,7 +92,6 @@
     #cards > .card:nth-child(2) li, #cards > .card:nth-child(3) li { font-family: var(--mono); font-size: 11.5px; line-height: 1.75; }
     .card pre { padding: 16px; background: #0e181f; border: 1px solid #2e3d47; color: #bdccd1; font: 12px/1.75 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 360px; overflow: auto; border-radius: 9px; margin: 12px 0; }
     .card code { font-family: var(--mono); }
-
     #approval-panel { background: #152a29; border: 1px solid #3e7068; border-radius: 13px; padding: 23px; margin-top: 14px; }
     .approval-head { display: flex; align-items: center; gap: 9px; margin-bottom: 8px; }
     .approval-head .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
@@ -106,8 +100,112 @@
     .decision-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
     #reject-button { min-width: 110px; }
     #approve-button { min-width: 190px; }
-    .site-footer { border-top: 1px solid #233039; color: var(--soft); padding: 21px 0 30px; font-size: 12px; }
+    .site-footer { border-top: 1px solid #233039; color: var(--soft); padding: 21px 0 30px; font-size: 12px;}
+    .lifecycle-flow {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  margin: 14px 0 16px;
+  padding: 18px 16px 10px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: linear-gradient(180deg, #12202a 0%, #101a22 100%);
+}
 
+.flow-step {
+  position: relative;
+  text-align: center;
+  padding-top: 34px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--soft);
+}
+
+.flow-step::before {
+  content: "";
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  width: 18px;
+  height: 18px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  border: 1.5px solid #425765;
+  background: #18242d;
+  z-index: 2;
+}
+
+.flow-step::after {
+  content: "";
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  width: 100%;
+  height: 2px;
+  background: #2a3b46;
+  z-index: 1;
+}
+
+.flow-step:last-child::after {
+  display: none;
+}
+
+.flow-step.is-past {
+  color: var(--text);
+}
+
+.flow-step.is-past::before {
+  border-color: var(--accent);
+  background: #17302d;
+  box-shadow: inset 0 0 0 3px #17302d;
+}
+
+.flow-step.is-past::after {
+  background: var(--accent);
+}
+
+.flow-step.is-current {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.flow-step.is-current::before {
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: 0 0 0 5px rgba(123, 229, 212, 0.14);
+}
+
+@media (max-width: 640px) {
+  .lifecycle-flow {
+    grid-template-columns: 1fr;
+    gap: 14px;
+    padding: 16px;
+  }
+
+  .flow-step {
+    text-align: left;
+    padding-top: 0;
+    padding-left: 34px;
+    min-height: 20px;
+  }
+
+  .flow-step::before {
+    top: 0;
+    left: 0;
+    transform: none;
+  }
+
+  .flow-step::after {
+    top: 18px;
+    left: 8px;
+    width: 2px;
+    height: calc(100% + 14px);
+  }
+
+  .flow-step:last-child::after {
+    display: none;
+  }
+}
     @media (max-width: 720px) {
       .container { padding: 0 18px; }
       .site-header .container { min-height: 62px; }
@@ -135,6 +233,53 @@
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
     }
+    .lifecycle-status {
+        margin: 14px 0;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--accent);
+        }
+        .lifecycle-status[data-status="failed"] {
+        color: #f0a6a6;
+        }
+        .lifecycle-status[data-status="running"],.lifecycle-status[data-status="queued"] {color: var(--muted);}
+.flow-step.is-past::before {
+  content: "✓";
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 22px;
+  height: 22px;
+
+  color: var(--accent);
+  background: #17302d;
+  border: 1.5px solid var(--accent);
+  border-radius: 50%;
+
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* Checkmark when the entire investigation finishes */
+.flow-step.is-current[data-stage="completed"]::before {
+  content: "✓";
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 22px;
+  height: 22px;
+
+  color: #0d141a;
+  background: var(--accent);
+  border-color: var(--accent);
+
+  font-size: 13px;
+  font-weight: 700;
+}
+
   </style>
 </head>
 <body>
@@ -178,7 +323,20 @@
         </div>
         <a id="json-link" target="_blank" rel="noopener">View raw JSON ↗</a>
       </div>
-      <p class="checkpoint-note">Showing the latest saved checkpoint. The investigation may still be running.</p>
+      <p
+        id="lifecycle-status"
+        class="lifecycle-status"
+        role="status"
+        aria-live="polite"
+        hidden
+      ></p>
+      <div id="lifecycle-flow" class="lifecycle-flow" hidden>
+        <div class="flow-step" data-stage="queued">Queued</div>
+        <div class="flow-step" data-stage="running">Running</div>
+        <div class="flow-step" data-stage="awaiting_approval">Review</div>
+        <div class="flow-step" data-stage="completed">Finished</div>
+      </div>
+      <p class="checkpoint-note">Evidence from the latest saved checkpoint.</p>
       <div id="cards"></div>
       <section id="approval-panel" hidden aria-label="Human approval">
         <div class="approval-head"><span class="status-dot" aria-hidden="true"></span><h3>Human approval</h3></div>
@@ -198,6 +356,10 @@ const form = document.getElementById("investigation-form");
     const message = document.getElementById("message");
     const results = document.getElementById("results");
     const cards = document.getElementById("cards");
+    const lifecycleStatus = document.getElementById("lifecycle-status");
+    const lifecycleFlow = document.getElementById("lifecycle-flow");
+    const flowSteps = [...document.querySelectorAll(".flow-step")];
+    let sawApproval = false;
     const approvalPanel = document.getElementById("approval-panel");
     const approvalMessage = document.getElementById("approval-message");
     const decisionButtons = document.getElementById("decision-buttons");
@@ -205,16 +367,19 @@ const form = document.getElementById("investigation-form");
     const rejectButton = document.getElementById("reject-button");
     let activeId = null;
     let decisionInProgress = false;
-
-    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
+    let pollTimer = null;
+    function stopPolling() {
+      if (pollTimer !== null) {
+        clearTimeout(pollTimer);
+        pollTimer = null;
+      }
+    }
     function addText(parent, tag, value) {
       const node = document.createElement(tag);
       node.textContent = String(value);
       parent.appendChild(node);
       return node;
     }
-
     function addCard(title) {
       const card = document.createElement("section");
       card.className = "card";
@@ -222,14 +387,12 @@ const form = document.getElementById("investigation-form");
       cards.appendChild(card);
       return card;
     }
-
     function addField(parent, label, value) {
       const p = document.createElement("p");
       addText(p, "strong", label + ": ");
       p.appendChild(document.createTextNode(value == null ? "Not available" : String(value)));
       parent.appendChild(p);
     }
-
     function addList(parent, items) {
       if (!Array.isArray(items) || items.length === 0) {
         addText(parent, "p", "None available.");
@@ -239,7 +402,6 @@ const form = document.getElementById("investigation-form");
       for (const item of items) addText(list, "li", item);
       parent.appendChild(list);
     }
-
     function renderInvestigation(data) {
       cards.replaceChildren();
       const overview = addCard("Overview");
@@ -248,14 +410,12 @@ const form = document.getElementById("investigation-form");
       addField(overview, "CI status", data.ci?.status);
       addField(overview, "CI run ID", data.ci?.run_id);
       addField(overview, "Service health", data.service_status?.status);
-
       addList(addCard("Failed tests"), data.failed_tests?.tests?.map(
         (test) => `${test.name}\n${test.message}`
       ));
       addList(addCard("Application logs"), data.logs?.entries?.map(
         (entry) => `[${entry.level}] ${entry.message}`
       ));
-
       const analysis = addCard("AI analysis");
       if (data.analysis) {
         for (const [heading, key] of [
@@ -270,7 +430,6 @@ const form = document.getElementById("investigation-form");
       } else {
         addText(analysis, "p", "Not requested or not available.");
       }
-
       const proposal = addCard("Issue proposal");
       if (data.issue_proposal) {
         addText(proposal, "h4", data.issue_proposal.title);
@@ -282,7 +441,6 @@ const form = document.getElementById("investigation-form");
       addList(addCard("Collection errors"), data.errors);
       results.hidden = false;
     }
-
     async function getSnapshot(id) {
       const response = await fetch(`/investigations/${encodeURIComponent(id)}`, { cache: "no-store" });
       if (response.status === 404) return null;
@@ -290,7 +448,6 @@ const form = document.getElementById("investigation-form");
       if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : `HTTP ${response.status}`);
       return data;
     }
-
     async function refreshApproval(id) {
       if (!id || id !== activeId) return;
       approvalPanel.hidden = true;
@@ -308,24 +465,138 @@ const form = document.getElementById("investigation-form");
       approvalMessage.textContent = "The agent is waiting for your decision. Review the proposal before continuing.";
       decisionButtons.hidden = false;
     }
+    function updateLifecycleFlow(status) {
+      if (status === "awaiting_approval") {
+        sawApproval = true;
+      }
 
-    async function loadEvidence(id) {
-      const snapshot = await getSnapshot(id);
-      if (id !== activeId) return false;
-      if (!snapshot) return false;
-      renderInvestigation(snapshot);
-      await refreshApproval(id);
-      return true;
+      const stages = ["queued", "running", "awaiting_approval", "completed"];
+      const current = stages.indexOf(status);
+
+      flowSteps.forEach((step, index) => {
+        const optionalReview =
+          status === "completed" && index === 2 && !sawApproval;
+
+        step.classList.toggle("is-current", index === current);
+        step.classList.toggle(
+          "is-past",
+          index < current && !optionalReview
+        );
+      });
+
+      // A failure is a terminal outcome, not a completed workflow.
+      lifecycleFlow.hidden = false;
     }
 
+    async function refreshLifecycle(id) {
+      if (!id || id !== activeId) return null;
+
+      const response = await fetch(
+        `/investigations/${encodeURIComponent(id)}/status`,
+        { cache: "no-store" }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Status check failed: HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (id !== activeId) return null;
+
+      const labels = {
+        queued: "Queued",
+        running: "Running",
+        awaiting_approval: "Awaiting approval",
+        completed: "Completed",
+        failed: "Failed"
+      };
+
+      lifecycleStatus.dataset.status = data.status;
+      lifecycleStatus.textContent =
+        "Investigation status: " +
+        (labels[data.status] || data.status) +
+        (data.error ? " | " + data.error : "");
+      lifecycleStatus.hidden = false;
+      updateLifecycleFlow(data.status);
+
+      return data.status;
+    }
+
+    async function loadEvidence(id) {
+  const status = await refreshLifecycle(id);
+  if (id !== activeId) return false;
+  const snapshot = await getSnapshot(id);
+  if (id !== activeId) return false;
+  if (snapshot) {
+    renderInvestigation(snapshot);
+  }
+  if (status === "awaiting_approval" && snapshot) {
+    await refreshApproval(id);
+  } else {
+    approvalPanel.hidden = true;
+    decisionButtons.hidden = true;
+  }
+  return Boolean(snapshot);
+}
+async function pollInvestigation(id) {
+  if (id !== activeId) return;
+  pollTimer = null;
+  try {
+    const hasEvidence = await loadEvidence(id);
+    if (id !== activeId) return;
+    const status = lifecycleStatus.dataset.status;
+    if (status === "completed" || status === "failed") {
+      stopPolling();
+      message.textContent = status === "completed"
+        ? "Investigation completed."
+        : "Investigation failed. Review the error above.";
+      return;
+    }
+    if (status === "awaiting_approval") {
+      message.textContent =
+        "The investigation is waiting for your approval.";
+    } else if (hasEvidence) {
+      message.textContent =
+        "Investigation running. Evidence updates automatically.";
+    } else {
+      message.textContent =
+        "Investigation running. Waiting for evidence...";
+    }
+  } catch (error) {
+    if (id !== activeId) return;
+    message.textContent =
+      "Unable to refresh automatically: " + error.message;
+  } finally {
+    if (
+      id === activeId &&
+      lifecycleStatus.dataset.status !== "completed" &&
+      lifecycleStatus.dataset.status !== "failed"
+    ) {
+      pollTimer = setTimeout(
+        () => pollInvestigation(id),
+        3000
+      );
+    }
+  }
+}
+    function startPolling(id) {
+      stopPolling();
+      pollInvestigation(id);
+    }
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
+      stopPolling();
       startButton.disabled = true;
       results.hidden = true;
       cards.replaceChildren();
       approvalPanel.hidden = true;
       decisionButtons.hidden = true;
       activeId = null;
+      sawApproval = false;
+      lifecycleFlow.hidden = true;
+      lifecycleStatus.hidden = true;
+      lifecycleStatus.textContent = "";
+      lifecycleStatus.dataset.status = "";
       message.textContent = "Submitting investigation...";
       const reportRun = document.getElementById("report-run").value.trim();
       const analyse = document.getElementById("analyse").checked;
@@ -342,23 +613,14 @@ const form = document.getElementById("investigation-form");
         document.getElementById("investigation-id").textContent = id;
         document.getElementById("json-link").href = `/investigations/${encodeURIComponent(id)}`;
         results.hidden = false;
-        message.textContent = "Accepted. Waiting for saved evidence...";
-        for (let attempt = 0; attempt < 20; attempt++) {
-          if (id !== activeId) return;
-          if (await loadEvidence(id)) {
-            message.textContent = "Saved evidence loaded. Use Refresh evidence for updates.";
-            return;
-          }
-          await sleep(1500);
-        }
-        message.textContent = "No checkpoint found yet. Check the Uvicorn terminal or refresh evidence.";
+        message.textContent = "Investigation accepted. Checking status...";
+        startPolling(id);
       } catch (error) {
         message.textContent = "Error: " + error.message;
       } finally {
         startButton.disabled = false;
       }
     });
-
     refreshButton.addEventListener("click", async () => {
       if (!activeId) return;
       const id = activeId;
@@ -372,7 +634,6 @@ const form = document.getElementById("investigation-form");
         refreshButton.disabled = false;
       }
     });
-
     async function submitDecision(decision) {
       if (!activeId || decisionInProgress || decisionButtons.hidden) return;
       if (decision === "approved" && !window.confirm(
@@ -412,7 +673,6 @@ const form = document.getElementById("investigation-form");
         rejectButton.disabled = false;
       }
     }
-
     approveButton.addEventListener("click", () => submitDecision("approved"));
     rejectButton.addEventListener("click", () => submitDecision("rejected"));
   </script>
