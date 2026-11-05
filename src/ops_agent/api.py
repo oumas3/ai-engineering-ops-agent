@@ -13,7 +13,9 @@ from ops_agent.api_models import (
     InvestigationResultResponse,
     StartInvestigationRequest,
     StartInvestigationResponse,
+    InvestigationStatusResponse,
 )
+from ops_agent.api_status_store import read_investigation_status
 from ops_agent.api_runner import InvestigationRunner
 from ops_agent.report_store import ReportRunNotFound
 from ops_agent.api_reader import read_investigation
@@ -24,6 +26,7 @@ from ops_agent.api_decisions import (
     apply_decision,
     is_approval_pending,
 )
+from ops_agent.api_status_store import save_investigation_status
 from ops_agent.api_models import InvestigationDecisionRequest,ApprovalStatusResponse
 
 
@@ -36,6 +39,7 @@ def create_app(start_runner: StartRunner | None = None) -> FastAPI:
             os.environ.get("OPS_ALLOW_CREATE_ISSUE") == "1"
         )
         app.state.decision_lock = asyncio.Lock()
+        app.state.status_db = None
         if start_runner is not None:
             app.state.start_runner = start_runner
             yield
@@ -44,6 +48,7 @@ def create_app(start_runner: StartRunner | None = None) -> FastAPI:
         runs_dir = Path(__file__).resolve().parents[2] / "runtime" / "runs"
         runner = InvestigationRunner(runs_dir)
         app.state.start_runner = runner.start
+        app.state.status_db = runner.status_db
         execute = partial(
             execute_investigation,
             allow_create_issue=app.state.allow_create_issue,
@@ -57,6 +62,34 @@ def create_app(start_runner: StartRunner | None = None) -> FastAPI:
                 await worker
 
     app = FastAPI(title="Engineering Operations Agent", lifespan=lifespan)
+    @app.get(
+        "/investigations/{investigation_id}/status",
+        response_model=InvestigationStatusResponse,
+    )
+    async def get_investigation_status(
+        investigation_id: UUID,
+    ) -> InvestigationStatusResponse:
+
+        database = app.state.status_db
+
+        if database is None:
+            raise HTTPException(
+                status_code=503,
+                detail="Investigation status storage is unavailable.",
+            )
+
+        result = await read_investigation_status(
+            database,
+            investigation_id,
+        )
+
+        if result is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Investigation status not found.",
+            )
+
+        return result
 
     @app.post(
         "/investigations",
@@ -144,14 +177,36 @@ def create_app(start_runner: StartRunner | None = None) -> FastAPI:
                     request.decision,
                     allow_create_issue=app.state.allow_create_issue,
                 )
-        except InvestigationNotFound as error:
-            raise HTTPException(404, detail=str(error)) from error
-        except NoPendingApproval as error:
-            raise HTTPException(409, detail=str(error)) from error
-        except IssueCreationDisabled as error:
-            raise HTTPException(403, detail=str(error)) from error
 
-        return Response(status_code=status.HTTP_204_NO_CONTENT)
+                if app.state.status_db is not None:
+                    await save_investigation_status(
+                        app.state.status_db,
+                        investigation_id,
+                        "completed",
+                    )
+
+        except InvestigationNotFound as error:
+            raise HTTPException(
+                status_code=404,
+                detail=str(error),
+            ) from error
+
+        except NoPendingApproval as error:
+            raise HTTPException(
+                status_code=409,
+                detail=str(error),
+            ) from error
+
+        except IssueCreationDisabled as error:
+            raise HTTPException(
+                status_code=403,
+                detail=str(error),
+            ) from error
+
+        return Response(
+            status_code=status.HTTP_204_NO_CONTENT
+        )
+
     
     @app.get("/", include_in_schema=False)
     async def home() -> FileResponse:

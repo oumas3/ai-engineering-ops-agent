@@ -13,13 +13,14 @@ from ops_agent.models import AgentPermissions
 from ops_agent.persistence import create_serializer
 from ops_agent.state import create_initial_state
 from ops_agent.workflow import build_graph
+from ops_agent.api_models import InvestigationLifecycleStatus
 
 
 async def execute_investigation(
     job: InvestigationJob,
     *,
     allow_create_issue: bool = False,
-) -> None:
+) -> InvestigationLifecycleStatus:
     src_dir = Path(__file__).resolve().parents[1]
     runtime_dir = src_dir.parent / "runtime"
     runtime_dir.mkdir(parents=True, exist_ok=True)
@@ -53,7 +54,36 @@ async def execute_investigation(
             permissions=AgentPermissions(can_create_issue=allow_create_issue),
         )
 
+
+        config = {
+            "configurable": {
+                "thread_id": str(job.investigation_id)
+            }
+        }
+
         await graph.ainvoke(
             create_initial_state("backend", "local"),
-            config={"configurable": {"thread_id": str(job.investigation_id)}},
+            config=config,
         )
+
+        snapshot = await graph.aget_state(config)
+
+        for task in snapshot.tasks:
+            if task.name != "request_approval":
+                continue
+
+            for pending_interrupt in task.interrupts:
+                payload = pending_interrupt.value
+
+                if (
+                    isinstance(payload, dict)
+                    and payload.get("action") == "create_issue"
+                ):
+                    return "awaiting_approval"
+
+        if snapshot.next:
+            raise RuntimeError(
+                "Investigation paused without a recognized approval request."
+            )
+
+        return "completed"

@@ -90,3 +90,18 @@ class InvestigationDecisionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     decision: Literal["approved", "rejected"]
+
+
+InvestigationLifecycleStatus = Literal[
+    "queued",
+    "running",
+    "awaiting_approval",
+    "completed",
+    "failed",
+]
+
+
+class InvestigationStatusResponse(BaseModel):
+    investigation_id: UUID
+    status: InvestigationLifecycleStatus
+    error: str | None = None
