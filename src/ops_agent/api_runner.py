@@ -116,7 +116,7 @@ class InvestigationRunner:
 
         finally:
             self.queue.task_done()
-
+                
     async def run_worker(
         self,
         execute: Callable[
@@ -126,4 +126,4 @@ class InvestigationRunner:
     ) -> None:
         while True:
             await self.process_next(execute)
-            await self.process_next(execute)
+        
