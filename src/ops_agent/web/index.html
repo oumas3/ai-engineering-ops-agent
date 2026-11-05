@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0d141a">
+  <title>Ops Agent | CI investigations</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0d141a;
+      --surface: #151f27;
+      --surface2: #19252e;
+      --line: #293842;
+      --text: #f3f7f6;
+      --muted: #9bacb6;
+      --soft: #738893;
+      --accent: #7be5d4;
+      --accent-strong: #91f0df;
+      --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font-family: "DM Sans", "Segoe UI", Arial, sans-serif;
+      font-size: 14px; line-height: 1.6; -webkit-font-smoothing: antialiased;
+    }
+    button, input { font: inherit; }
+    button, a, input { -webkit-tap-highlight-color: transparent; }
+    button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+    [hidden] { display: none !important; }
+    .container { max-width: 1000px; margin: 0 auto; padding: 0 28px; }
+
+    .site-header { border-bottom: 1px solid #233039; }
+    .site-header .container { display: flex; min-height: 72px; align-items: center; justify-content: space-between; gap: 20px; }
+    .brand { display: inline-flex; align-items: center; gap: 12px; color: var(--text); text-decoration: none; font-weight: 800; font-size: 17px; letter-spacing: -.055em; }
+    .brand-mark { position: relative; width: 27px; height: 27px; display: inline-flex; align-items: center; justify-content: center; border-radius: 9px; background: var(--accent); color: var(--bg); font-size: 16px; line-height: 1; font-weight: 800; letter-spacing: -.1em; }
+    .brand-mark::after { content: ''; width: 5px; height: 5px; border-radius: 100%; background: var(--bg); position: absolute; bottom: 5px; right: 5px; }
+    .brand span:last-child { padding-top: 1px; }
+    .header-note { display: flex; align-items: center; gap: 9px; color: var(--muted); font-size: 12px; font-weight: 500; }
+    .header-note::before { content: ''; width: 6px; height: 6px; background: var(--accent); border-radius: 50%; opacity: .85; }
+
+    .hero { padding: 76px 0 35px; max-width: 740px; }
+    .eyebrow { color: var(--accent); font-size: 11px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; margin: 0 0 14px; }
+    h1 { font-size: clamp(34px, 5.5vw, 54px); font-weight: 700; letter-spacing: -.065em; line-height: 1.12; margin: 0 0 15px; }
+    .hero-description { font-size: 16px; color: var(--muted); margin: 0; max-width: 560px; line-height: 1.7; }
+
+    .form-shell { margin-bottom: 54px; }
+    .investigation-form { padding: 24px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; }
+    .field-label { display: block; font-weight: 600; font-size: 13px; margin-bottom: 11px; color: var(--text); }
+    .form-row { display: flex; align-items: stretch; gap: 11px; }
+    .form-field { flex: 1; min-width: 0; }
+    #report-run { width: 100%; height: 49px; background: #0d171e; color: var(--text); border: 1px solid #354650; border-radius: 9px; padding: 12px 14px; font: 13px var(--mono); letter-spacing: -.025em; transition: border-color .18s; }
+    #report-run:focus { border-color: var(--accent); outline-offset: 1px; }
+    #report-run::placeholder { color: #70848f; }
+    button { border: 1px solid transparent; border-radius: 9px; min-height: 43px; padding: 10px 16px; cursor: pointer; font-size: 13px; font-weight: 700; transition: background .18s, border-color .18s, transform .18s; }
+    button:not(:disabled):active { transform: translateY(1px); }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    #start-button, #approve-button { background: var(--accent); color: #09221f; }
+    #start-button:hover:not(:disabled), #approve-button:hover:not(:disabled) { background: var(--accent-strong); }
+    #start-button { min-height: 49px; padding: 11px 21px; align-self: end; white-space: nowrap; }
+    button.secondary { background: transparent; color: var(--text); border-color: #465660; }
+    button.secondary:hover:not(:disabled) { background: #22303a; border-color: #5d707c; }
+    .checkbox-row { display: inline-flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; font-weight: 400; margin-top: 19px; cursor: pointer; user-select: none; }
+    .checkbox-row input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+    #message:not(:empty) { margin: 16px 0 0; color: #bcd5d3; background: #132a2a; border: 1px solid #285050; border-radius: 9px; padding: 12px 14px; font-size: 13px; overflow-wrap: anywhere; }
+
+    .results-section { margin-bottom: 72px; }
+    .result-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+    h2 { font-size: 22px; letter-spacing: -.04em; line-height: 1.25; font-weight: 700; margin: 0; }
+    #refresh-button { min-height: 38px; font-size: 12px; padding: 8px 13px; }
+    .investigation-meta { display: flex; align-items: center; justify-content: space-between; gap: 14px; border-bottom: 1px solid var(--line); padding-bottom: 17px; margin-bottom: 10px; flex-wrap: wrap; }
+    .meta-label { color: var(--soft); font-size: 11px; letter-spacing: .09em; font-weight: 700; text-transform: uppercase; margin: 0 0 4px; }
+    #investigation-id { display: block; color: #d7e5e4; font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
+    a { color: var(--accent); text-decoration: none; font-weight: 600; }
+    a:hover { text-decoration: underline; }
+    .checkpoint-note { color: var(--soft); font-size: 12px; margin: 8px 0 20px; }
+
+    #cards { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+    .card { border: 1px solid var(--line); border-radius: 13px; padding: 21px; background: var(--surface); min-width: 0; }
+    #cards > .card:first-child, #cards > .card:nth-child(5) { grid-column: 1 / -1; }
+    #cards > .card:nth-child(2), #cards > .card:nth-child(3) { min-height: 204px; }
+    h3 { font-size: 14px; font-weight: 700; letter-spacing: -.015em; margin: 0 0 15px; }
+    h4 { font-size: 13px; color: #e4eeee; font-weight: 600; margin: 18px 0 9px; }
+    .card h4:first-of-type { margin-top: 0; }
+    .card p { margin: 8px 0; color: var(--muted); overflow-wrap: anywhere; }
+    .card p strong { color: #e4efee; font-weight: 600; }
+    #cards > .card:first-child p { display: flex; flex-wrap: wrap; gap: 5px 12px; margin: 0; border-top: 1px solid #283640; padding: 10px 0; }
+    #cards > .card:first-child p strong { flex: 0 0 150px; color: var(--muted); }
+    #cards > .card:first-child p:first-of-type { border-top: 0; }
+    .card ul { margin: 0; padding: 0 0 0 17px; color: var(--muted); }
+    .card li { padding: 5px 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.7; }
+    #cards > .card:nth-child(2) li, #cards > .card:nth-child(3) li { font-family: var(--mono); font-size: 11.5px; line-height: 1.75; }
+    .card pre { padding: 16px; background: #0e181f; border: 1px solid #2e3d47; color: #bdccd1; font: 12px/1.75 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 360px; overflow: auto; border-radius: 9px; margin: 12px 0; }
+    .card code { font-family: var(--mono); }
+
+    #approval-panel { background: #152a29; border: 1px solid #3e7068; border-radius: 13px; padding: 23px; margin-top: 14px; }
+    .approval-head { display: flex; align-items: center; gap: 9px; margin-bottom: 8px; }
+    .approval-head .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+    #approval-panel h3 { margin: 0; font-size: 15px; }
+    #approval-panel p { color: #aecac6; font-size: 13px; margin: 0; }
+    .decision-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+    #reject-button { min-width: 110px; }
+    #approve-button { min-width: 190px; }
+    .site-footer { border-top: 1px solid #233039; color: var(--soft); padding: 21px 0 30px; font-size: 12px; }
+
+    @media (max-width: 720px) {
+      .container { padding: 0 18px; }
+      .site-header .container { min-height: 62px; }
+      .hero { padding: 58px 0 29px; }
+      .hero-description { font-size: 14px; }
+      .investigation-form { padding: 18px; }
+      .form-row { flex-direction: column; }
+      #start-button { align-self: stretch; }
+      #cards { grid-template-columns: 1fr; }
+      #cards > .card:first-child, #cards > .card:nth-child(5) { grid-column: auto; }
+      .card { padding: 18px; }
+      .form-shell { margin-bottom: 40px; }
+      .result-header { align-items: flex-start; }
+      .header-note { font-size: 11px; }
+    }
+    @media (max-width: 420px) {
+      .brand { font-size: 15px; }
+      .header-note { display: none; }
+      .result-header { flex-direction: column; align-items: stretch; }
+      .result-header button { align-self: flex-start; }
+      .decision-actions { display: grid; }
+      .decision-actions button { width: 100%; }
+      #cards > .card:first-child p strong { flex-basis: 100%; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a href="/" class="brand" aria-label="Ops Agent home">
+        <span class="brand-mark" aria-hidden="true">o</span>
+        <span>ops agent</span>
+      </a>
+      <span class="header-note">Local workspace</span>
+    </div>
+  </header>
+  <main class="container">
+    <div class="hero">
+      <p class="eyebrow">Engineering operations</p>
+      <h1>Investigate what failed.</h1>
+      <p class="hero-description">Review CI failures, inspect the evidence, and decide whether to create an issue.</p>
+    </div>
+    <section class="form-shell" aria-label="New investigation">
+      <form id="investigation-form" class="investigation-form">
+        <label class="field-label" for="report-run">Report run ID</label>
+        <div class="form-row">
+          <div class="form-field">
+            <input id="report-run" type="text" required value="8446db8b15b44d6faf077f7d31dc0ac2" placeholder="Paste a report run ID" autocomplete="off" spellcheck="false">
+          </div>
+          <button id="start-button" type="submit">Start investigation</button>
+        </div>
+        <label class="checkbox-row"><input id="analyse" type="checkbox"> Include optional AI analysis</label>
+        <p id="message" role="status" aria-live="polite"></p>
+      </form>
+    </section>
+    <section id="results" class="results-section" aria-label="Investigation results" hidden>
+      <div class="result-header">
+        <h2>Investigation results</h2>
+        <button id="refresh-button" class="secondary" type="button">Refresh evidence</button>
+      </div>
+      <div class="investigation-meta">
+        <div>
+          <p class="meta-label">Investigation ID</p>
+          <code id="investigation-id"></code>
+        </div>
+        <a id="json-link" target="_blank" rel="noopener">View raw JSON ↗</a>
+      </div>
+      <p class="checkpoint-note">Showing the latest saved checkpoint. The investigation may still be running.</p>
+      <div id="cards"></div>
+      <section id="approval-panel" hidden aria-label="Human approval">
+        <div class="approval-head"><span class="status-dot" aria-hidden="true"></span><h3>Human approval</h3></div>
+        <p id="approval-message"></p>
+        <div id="decision-buttons" class="decision-actions" hidden>
+          <button id="reject-button" class="secondary" type="button">Reject</button>
+          <button id="approve-button" type="button">Approve issue creation</button>
+        </div>
+      </section>
+    </section>
+  </main>
+  <footer class="site-footer"><div class="container">Ops Agent · Local development interface</div></footer>
+  <script>
+const form = document.getElementById("investigation-form");
+    const startButton = document.getElementById("start-button");
+    const refreshButton = document.getElementById("refresh-button");
+    const message = document.getElementById("message");
+    const results = document.getElementById("results");
+    const cards = document.getElementById("cards");
+    const approvalPanel = document.getElementById("approval-panel");
+    const approvalMessage = document.getElementById("approval-message");
+    const decisionButtons = document.getElementById("decision-buttons");
+    const approveButton = document.getElementById("approve-button");
+    const rejectButton = document.getElementById("reject-button");
+    let activeId = null;
+    let decisionInProgress = false;
+
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    function addText(parent, tag, value) {
+      const node = document.createElement(tag);
+      node.textContent = String(value);
+      parent.appendChild(node);
+      return node;
+    }
+
+    function addCard(title) {
+      const card = document.createElement("section");
+      card.className = "card";
+      addText(card, "h3", title);
+      cards.appendChild(card);
+      return card;
+    }
+
+    function addField(parent, label, value) {
+      const p = document.createElement("p");
+      addText(p, "strong", label + ": ");
+      p.appendChild(document.createTextNode(value == null ? "Not available" : String(value)));
+      parent.appendChild(p);
+    }
+
+    function addList(parent, items) {
+      if (!Array.isArray(items) || items.length === 0) {
+        addText(parent, "p", "None available.");
+        return;
+      }
+      const list = document.createElement("ul");
+      for (const item of items) addText(list, "li", item);
+      parent.appendChild(list);
+    }
+
+    function renderInvestigation(data) {
+      cards.replaceChildren();
+      const overview = addCard("Overview");
+      addField(overview, "Service", data.service);
+      addField(overview, "Environment", data.environment);
+      addField(overview, "CI status", data.ci?.status);
+      addField(overview, "CI run ID", data.ci?.run_id);
+      addField(overview, "Service health", data.service_status?.status);
+
+      addList(addCard("Failed tests"), data.failed_tests?.tests?.map(
+        (test) => `${test.name}\n${test.message}`
+      ));
+      addList(addCard("Application logs"), data.logs?.entries?.map(
+        (entry) => `[${entry.level}] ${entry.message}`
+      ));
+
+      const analysis = addCard("AI analysis");
+      if (data.analysis) {
+        for (const [heading, key] of [
+          ["Observations", "observations"],
+          ["Hypotheses", "hypotheses"],
+          ["Recommended checks", "recommended_checks"],
+          ["Limitations", "limitations"]
+        ]) {
+          addText(analysis, "h4", heading);
+          addList(analysis, data.analysis[key]);
+        }
+      } else {
+        addText(analysis, "p", "Not requested or not available.");
+      }
+
+      const proposal = addCard("Issue proposal");
+      if (data.issue_proposal) {
+        addText(proposal, "h4", data.issue_proposal.title);
+        addText(proposal, "pre", data.issue_proposal.description);
+        addText(proposal, "p", "Draft only. Approval status is checked separately.");
+      } else {
+        addText(proposal, "p", "No issue proposal available.");
+      }
+      addList(addCard("Collection errors"), data.errors);
+      results.hidden = false;
+    }
+
+    async function getSnapshot(id) {
+      const response = await fetch(`/investigations/${encodeURIComponent(id)}`, { cache: "no-store" });
+      if (response.status === 404) return null;
+      const data = await response.json();
+      if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : `HTTP ${response.status}`);
+      return data;
+    }
+
+    async function refreshApproval(id) {
+      if (!id || id !== activeId) return;
+      approvalPanel.hidden = true;
+      decisionButtons.hidden = true;
+      const response = await fetch(`/investigations/${encodeURIComponent(id)}/approval`, { cache: "no-store" });
+      if (response.status === 404) return;
+      const data = await response.json();
+      if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : `Approval check failed: HTTP ${response.status}`);
+      if (id !== activeId || !data.approval_pending) return;
+      approvalPanel.hidden = false;
+      if (!data.issue_creation_enabled) {
+        approvalMessage.textContent = "Approval is pending, but issue creation is disabled on the server.";
+        return;
+      }
+      approvalMessage.textContent = "The agent is waiting for your decision. Review the proposal before continuing.";
+      decisionButtons.hidden = false;
+    }
+
+    async function loadEvidence(id) {
+      const snapshot = await getSnapshot(id);
+      if (id !== activeId) return false;
+      if (!snapshot) return false;
+      renderInvestigation(snapshot);
+      await refreshApproval(id);
+      return true;
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      startButton.disabled = true;
+      results.hidden = true;
+      cards.replaceChildren();
+      approvalPanel.hidden = true;
+      decisionButtons.hidden = true;
+      activeId = null;
+      message.textContent = "Submitting investigation...";
+      const reportRun = document.getElementById("report-run").value.trim();
+      const analyse = document.getElementById("analyse").checked;
+      try {
+        const response = await fetch("/investigations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ report_run: reportRun, analyse })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : `HTTP ${response.status}`);
+        const id = data.investigation_id;
+        activeId = id;
+        document.getElementById("investigation-id").textContent = id;
+        document.getElementById("json-link").href = `/investigations/${encodeURIComponent(id)}`;
+        results.hidden = false;
+        message.textContent = "Accepted. Waiting for saved evidence...";
+        for (let attempt = 0; attempt < 20; attempt++) {
+          if (id !== activeId) return;
+          if (await loadEvidence(id)) {
+            message.textContent = "Saved evidence loaded. Use Refresh evidence for updates.";
+            return;
+          }
+          await sleep(1500);
+        }
+        message.textContent = "No checkpoint found yet. Check the Uvicorn terminal or refresh evidence.";
+      } catch (error) {
+        message.textContent = "Error: " + error.message;
+      } finally {
+        startButton.disabled = false;
+      }
+    });
+
+    refreshButton.addEventListener("click", async () => {
+      if (!activeId) return;
+      const id = activeId;
+      refreshButton.disabled = true;
+      try {
+        if (await loadEvidence(id)) message.textContent = "Latest saved evidence loaded.";
+        else message.textContent = "No saved checkpoint yet.";
+      } catch (error) {
+        message.textContent = "Error: " + error.message;
+      } finally {
+        refreshButton.disabled = false;
+      }
+    });
+
+    async function submitDecision(decision) {
+      if (!activeId || decisionInProgress || decisionButtons.hidden) return;
+      if (decision === "approved" && !window.confirm(
+        "Approve creation of a local issue JSON file?"
+      )) return;
+      const id = activeId;
+      decisionInProgress = true;
+      approveButton.disabled = true;
+      rejectButton.disabled = true;
+      try {
+        // Recheck the server immediately before sending a write decision.
+        const statusResponse = await fetch(`/investigations/${encodeURIComponent(id)}/approval`, { cache: "no-store" });
+        if (!statusResponse.ok) throw new Error(`Approval check failed: HTTP ${statusResponse.status}`);
+        const status = await statusResponse.json();
+        if (!status.approval_pending || !status.issue_creation_enabled) {
+          throw new Error("This investigation is not currently awaiting an enabled approval.");
+        }
+        const response = await fetch(`/investigations/${encodeURIComponent(id)}/decision`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ decision })
+        });
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}));
+          throw new Error(typeof error.detail === "string" ? error.detail : `HTTP ${response.status}`);
+        }
+        message.textContent = decision === "approved"
+          ? "Approval accepted. Check runtime/issues/ for the local issue record."
+          : "Rejection accepted. No issue should be created for this decision.";
+        await loadEvidence(id);
+      } catch (error) {
+        message.textContent = "Decision error: " + error.message;
+        try { await refreshApproval(id); } catch { decisionButtons.hidden = true; }
+      } finally {
+        decisionInProgress = false;
+        approveButton.disabled = false;
+        rejectButton.disabled = false;
+      }
+    }
+
+    approveButton.addEventListener("click", () => submitDecision("approved"));
+    rejectButton.addEventListener("click", () => submitDecision("rejected"));
+  </script>
+</body>
+</html>
