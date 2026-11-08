@@ -6,8 +6,7 @@ import os
 from pathlib import Path
 from uuid import UUID
 from fastapi.responses import FileResponse
-from fastapi import FastAPI, HTTPException, Response, status
-
+from fastapi import FastAPI, HTTPException, Response, Query, status
 from ops_agent.api_executor import execute_investigation
 from ops_agent.api_models import (
     InvestigationResultResponse,
@@ -15,7 +14,7 @@ from ops_agent.api_models import (
     StartInvestigationResponse,
     InvestigationStatusResponse,
 )
-from ops_agent.api_status_store import read_investigation_status
+from ops_agent.api_status_store import read_investigation_status , list_investigation_statuses
 from ops_agent.api_runner import InvestigationRunner
 from ops_agent.report_store import ReportRunNotFound
 from ops_agent.api_reader import read_investigation
@@ -62,6 +61,27 @@ def create_app(start_runner: StartRunner | None = None) -> FastAPI:
                 await worker
 
     app = FastAPI(title="Engineering Operations Agent", lifespan=lifespan)
+    @app.get(
+        "/investigations",
+        response_model=list[InvestigationStatusResponse],
+    )
+    async def list_investigations(
+        limit: int = Query(20, ge=1, le=100),
+    ) -> list[InvestigationStatusResponse]:
+
+        database = app.state.status_db
+
+        if database is None:
+            raise HTTPException(
+                status_code=503,
+                detail="Investigation history is unavailable.",
+            )
+
+        return await list_investigation_statuses(
+            database,
+            limit,
+        )
+
     @app.get(
         "/investigations/{investigation_id}/status",
         response_model=InvestigationStatusResponse,
