@@ -20,7 +20,7 @@ from ops_agent.api_models import (
 
 from ops_agent.report_store import find_report_directory
 from ops_agent.api_runner import InvestigationRunner
-
+import sqlite3
 
 
 def test_decision_updates_lifecycle_status(
@@ -381,3 +381,136 @@ def test_list_investigations_invalid_limit() -> None:
 
     assert response_low.status_code == 422
     assert response_high.status_code == 422
+
+def test_get_investigation_events(tmp_path: Path) -> None:
+    database = tmp_path / "statuses.sqlite"
+    investigation_id = UUID(
+        "00000000-0000-4000-8000-000000000060"
+    )
+
+    async def prepare() -> None:
+        await initialize_status_store(database)
+        await save_investigation_status(
+            database, investigation_id, "queued"
+        )
+        await save_investigation_status(
+            database, investigation_id, "running"
+        )
+        await save_investigation_status(
+            database, investigation_id, "completed"
+        )
+
+    asyncio.run(prepare())
+
+    with TestClient(create_app(AsyncMock())) as client:
+        client.app.state.status_db = database
+        response = client.get(
+            f"/investigations/{investigation_id}/events"
+        )
+
+    assert response.status_code == 200
+
+    events = response.json()
+
+    assert [event["status"] for event in events] == [
+        "queued",
+        "running",
+        "completed",
+    ]
+
+    assert len(events) == 3
+    assert all(event["occurred_at"] for event in events)
+    assert all(
+        event["investigation_id"] == str(investigation_id)
+        for event in events
+    )
+
+    assert [event["event_id"] for event in events] == sorted(
+        event["event_id"] for event in events
+    )
+
+
+def test_get_unknown_investigation_events(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "statuses.sqlite"
+    asyncio.run(initialize_status_store(database))
+
+    investigation_id = UUID(
+        "00000000-0000-4000-8000-000000000061"
+    )
+
+    with TestClient(create_app(AsyncMock())) as client:
+        client.app.state.status_db = database
+        response = client.get(
+            f"/investigations/{investigation_id}/events"
+        )
+
+    assert response.status_code == 404
+
+def test_get_investigation_metrics(tmp_path: Path) -> None:
+    database = tmp_path / "statuses.sqlite"
+    investigation_id = UUID(
+        "00000000-0000-4000-8000-000000000080"
+    )
+
+    async def prepare() -> None:
+        await initialize_status_store(database)
+        await save_investigation_status(
+            database, investigation_id, "queued"
+        )
+        await save_investigation_status(
+            database, investigation_id, "running"
+        )
+        await save_investigation_status(
+            database, investigation_id, "completed"
+        )
+
+    asyncio.run(prepare())
+
+    # Use deterministic timestamps instead of relying
+    # on the machine's execution speed.
+    with sqlite3.connect(database) as db:
+        db.execute(
+            """
+            UPDATE investigation_events
+            SET occurred_at = CASE status
+                WHEN 'queued' THEN '2026-11-08T14:07:12.000Z'
+                WHEN 'running' THEN '2026-11-08T14:07:13.000Z'
+                WHEN 'completed' THEN '2026-11-08T14:07:18.000Z'
+            END
+            WHERE investigation_id = ?
+            """,
+            (str(investigation_id),),
+        )
+
+    with TestClient(create_app(AsyncMock())) as client:
+        client.app.state.status_db = database
+        response = client.get(
+            f"/investigations/{investigation_id}/metrics"
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "investigation_id": str(investigation_id),
+        "execution_duration_ms": 5000,
+    }
+
+
+def test_unknown_investigation_metrics(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "statuses.sqlite"
+    asyncio.run(initialize_status_store(database))
+
+    investigation_id = UUID(
+        "00000000-0000-4000-8000-000000000081"
+    )
+
+    with TestClient(create_app(AsyncMock())) as client:
+        client.app.state.status_db = database
+        response = client.get(
+            f"/investigations/{investigation_id}/metrics"
+        )
+
+    assert response.status_code == 404

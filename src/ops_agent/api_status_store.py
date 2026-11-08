@@ -8,7 +8,11 @@ from ops_agent.api_models import (
     InvestigationLifecycleStatus,
     InvestigationStatusResponse,
 )
-
+from ops_agent.api_models import (
+    InvestigationLifecycleStatus,
+    InvestigationStatusResponse,
+    InvestigationEventResponse,
+)
 
 
 async def list_investigation_statuses(
@@ -59,6 +63,32 @@ async def initialize_status_store(database_path: Path) -> None:
                 error TEXT
             )
         """)
+
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS investigation_events (
+                event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                investigation_id TEXT NOT NULL,
+                status TEXT NOT NULL CHECK (
+                    status IN (
+                        'queued',
+                        'running',
+                        'awaiting_approval',
+                        'completed',
+                        'failed'
+                    )
+                ),
+                error TEXT,
+                occurred_at TEXT NOT NULL DEFAULT (
+                    strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                )
+            )
+        """)
+
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_investigation_events
+            ON investigation_events (investigation_id, event_id)
+        """)
+
         await db.commit()
 
 
@@ -82,6 +112,17 @@ async def save_investigation_status(
             """,
             (str(investigation_id), status, error),
         )
+
+        await db.execute(
+            """
+            INSERT INTO investigation_events (
+                investigation_id, status, error
+            )
+            VALUES (?, ?, ?)
+            """,
+            (str(investigation_id), status, error),
+        )
+
         await db.commit()
 
 
@@ -112,3 +153,34 @@ async def read_investigation_status(
         status=row[0],
         error=row[1],
     )
+
+
+async def read_investigation_events(
+    database_path: Path,
+    investigation_id: UUID,
+) -> list[InvestigationEventResponse]:
+    if not database_path.is_file():
+        return []
+
+    async with aiosqlite.connect(str(database_path)) as db:
+        async with db.execute(
+            """
+            SELECT event_id, status, error, occurred_at
+            FROM investigation_events
+            WHERE investigation_id = ?
+            ORDER BY event_id ASC
+            """,
+            (str(investigation_id),),
+        ) as cursor:
+            rows = await cursor.fetchall()
+
+    return [
+        InvestigationEventResponse(
+            event_id=row[0],
+            investigation_id=investigation_id,
+            status=row[1],
+            error=row[2],
+            occurred_at=row[3],
+        )
+        for row in rows
+    ]

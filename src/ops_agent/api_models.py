@@ -1,5 +1,6 @@
 from typing import Annotated, Literal
 from uuid import UUID
+from datetime import datetime
 
 from pydantic import (
     BaseModel,
@@ -105,3 +106,15 @@ class InvestigationStatusResponse(BaseModel):
     investigation_id: UUID
     status: InvestigationLifecycleStatus
     error: str | None = None
+
+
+class InvestigationEventResponse(BaseModel):
+    event_id: int
+    investigation_id: UUID
+    status: InvestigationLifecycleStatus
+    error: str | None = None
+    occurred_at: datetime
+
+class InvestigationMetricsResponse(BaseModel):
+    investigation_id: UUID
+    execution_duration_ms: int | None
