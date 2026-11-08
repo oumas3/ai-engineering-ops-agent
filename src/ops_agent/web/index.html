@@ -445,6 +445,7 @@
         <h3>Execution history</h3>
         <p id="events-message" role="status"></p>
         <ol id="events-list" class="events-list"></ol>
+        <p id="execution-duration" class="checkpoint-note" hidden></p>
       </section>
 
       <p class="checkpoint-note">Evidence from the latest saved checkpoint.</p>
@@ -478,6 +479,7 @@ const form = document.getElementById("investigation-form");
     const rejectButton = document.getElementById("reject-button");
     const eventsList = document.getElementById("events-list");
     const eventsMessage = document.getElementById("events-message");
+    const executionDuration = document.getElementById("execution-duration");
     let activeId = null;
     let decisionInProgress = false;
     let pollTimer = null;
@@ -702,13 +704,50 @@ async function refreshEvents(id) {
 
 
 
+async function refreshMetrics(id) {
+  if (!id || id !== activeId) return;
+
+  try {
+    const response = await fetch(
+      `/investigations/${encodeURIComponent(id)}/metrics`,
+      { cache: "no-store" }
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (id !== activeId) return;
+
+    const ms = data.execution_duration_ms;
+
+    if (typeof ms === "number" && Number.isFinite(ms) && ms >= 0) {
+      executionDuration.textContent =
+        `Execution time: ${(ms / 1000).toFixed(2)} s`;
+      executionDuration.hidden = false;
+    } else {
+      executionDuration.textContent = "";
+      executionDuration.hidden = true;
+    }
+
+  } catch (error) {
+    if (id !== activeId) return;
+
+    executionDuration.textContent = "Execution time unavailable.";
+    executionDuration.hidden = false;
+  }
+}
+
 async function loadEvidence(id) {
   const status = await refreshLifecycle(id);
   if (id !== activeId) return false;
 
   await refreshEvents(id);
   if (id !== activeId) return false;
-
+  await refreshMetrics(id);
+if (id !== activeId) return false;
   const snapshot = await getSnapshot(id);
 
   if (id !== activeId) return false;
@@ -871,7 +910,8 @@ function openHistory(id) {
 
   activeId = id;
   sawApproval = false;
-
+  executionDuration.hidden = true;
+executionDuration.textContent = "";
   cards.replaceChildren();
   results.hidden = false;
   approvalPanel.hidden = true;

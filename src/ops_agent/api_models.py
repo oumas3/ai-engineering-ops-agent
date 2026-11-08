@@ -114,3 +114,7 @@ class InvestigationEventResponse(BaseModel):
     status: InvestigationLifecycleStatus
     error: str | None = None
     occurred_at: datetime
+
+class InvestigationMetricsResponse(BaseModel):
+    investigation_id: UUID
+    execution_duration_ms: int | None
