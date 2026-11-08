@@ -326,6 +326,53 @@
 }
 
 
+.events-section {
+  margin: 20px 0;
+  padding: 18px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.events-section h3 {
+  margin: 0 0 14px;
+}
+
+.events-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 14px;
+}
+
+.event-item {
+  border-left: 2px solid var(--accent);
+  padding-left: 14px;
+}
+
+.event-item[data-status="failed"] {
+  border-color: #f0a6a6;
+}
+
+.event-item strong {
+  display: block;
+  font-size: 13px;
+}
+
+.event-item time,
+#events-message {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.event-item p {
+  margin: 6px 0 0;
+  font-size: 12px;
+}
+
   </style>
 </head>
 <body>
@@ -393,6 +440,13 @@
         <div class="flow-step" data-stage="awaiting_approval">Review</div>
         <div class="flow-step" data-stage="completed">Finished</div>
       </div>
+
+      <section class="events-section" aria-label="Execution history">
+        <h3>Execution history</h3>
+        <p id="events-message" role="status"></p>
+        <ol id="events-list" class="events-list"></ol>
+      </section>
+
       <p class="checkpoint-note">Evidence from the latest saved checkpoint.</p>
       <div id="cards"></div>
       <section id="approval-panel" hidden aria-label="Human approval">
@@ -422,6 +476,8 @@ const form = document.getElementById("investigation-form");
     const decisionButtons = document.getElementById("decision-buttons");
     const approveButton = document.getElementById("approve-button");
     const rejectButton = document.getElementById("reject-button");
+    const eventsList = document.getElementById("events-list");
+    const eventsMessage = document.getElementById("events-message");
     let activeId = null;
     let decisionInProgress = false;
     let pollTimer = null;
@@ -579,10 +635,82 @@ const form = document.getElementById("investigation-form");
       return data.status;
     }
 
-    async function loadEvidence(id) {
+async function refreshEvents(id) {
+  if (!id || id !== activeId) return;
+
+  try {
+    const response = await fetch(
+      `/investigations/${encodeURIComponent(id)}/events`,
+      { cache: "no-store" }
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const events = await response.json();
+
+    if (id !== activeId) return;
+
+    if (!Array.isArray(events)) {
+      throw new Error("Invalid events response");
+    }
+
+    const fragment = document.createDocumentFragment();
+
+    for (const event of events) {
+      const item = document.createElement("li");
+      item.className = "event-item";
+      item.dataset.status = event.status;
+
+      addText(
+        item,
+        "strong",
+        event.status.replaceAll("_", " ")
+      );
+
+      const time = document.createElement("time");
+      time.dateTime = event.occurred_at;
+
+      const date = new Date(event.occurred_at);
+      time.textContent = Number.isNaN(date.getTime())
+        ? event.occurred_at
+        : date.toLocaleString();
+
+      item.appendChild(time);
+
+      if (event.error) {
+        addText(item, "p", event.error);
+      }
+
+      fragment.appendChild(item);
+    }
+
+    eventsList.replaceChildren(fragment);
+
+    eventsMessage.textContent = events.length === 0
+      ? "No recorded events for this investigation."
+      : "";
+
+  } catch (error) {
+    if (id !== activeId) return;
+
+    eventsMessage.textContent =
+      "Unable to load execution history: " + error.message;
+  }
+}
+
+
+
+async function loadEvidence(id) {
   const status = await refreshLifecycle(id);
   if (id !== activeId) return false;
+
+  await refreshEvents(id);
+  if (id !== activeId) return false;
+
   const snapshot = await getSnapshot(id);
+
   if (id !== activeId) return false;
   if (snapshot) {
     renderInvestigation(snapshot);
@@ -736,7 +864,8 @@ async function pollInvestigation(id) {
 const historyList = document.getElementById("history-list");
 const historyMessage = document.getElementById("history-message");
 const historyRefresh = document.getElementById("history-refresh");
-
+eventsList.replaceChildren();
+eventsMessage.textContent = "";
 function openHistory(id) {
   stopPolling();
 

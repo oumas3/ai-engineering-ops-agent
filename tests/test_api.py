@@ -381,3 +381,69 @@ def test_list_investigations_invalid_limit() -> None:
 
     assert response_low.status_code == 422
     assert response_high.status_code == 422
+
+def test_get_investigation_events(tmp_path: Path) -> None:
+    database = tmp_path / "statuses.sqlite"
+    investigation_id = UUID(
+        "00000000-0000-4000-8000-000000000060"
+    )
+
+    async def prepare() -> None:
+        await initialize_status_store(database)
+        await save_investigation_status(
+            database, investigation_id, "queued"
+        )
+        await save_investigation_status(
+            database, investigation_id, "running"
+        )
+        await save_investigation_status(
+            database, investigation_id, "completed"
+        )
+
+    asyncio.run(prepare())
+
+    with TestClient(create_app(AsyncMock())) as client:
+        client.app.state.status_db = database
+        response = client.get(
+            f"/investigations/{investigation_id}/events"
+        )
+
+    assert response.status_code == 200
+
+    events = response.json()
+
+    assert [event["status"] for event in events] == [
+        "queued",
+        "running",
+        "completed",
+    ]
+
+    assert len(events) == 3
+    assert all(event["occurred_at"] for event in events)
+    assert all(
+        event["investigation_id"] == str(investigation_id)
+        for event in events
+    )
+
+    assert [event["event_id"] for event in events] == sorted(
+        event["event_id"] for event in events
+    )
+
+
+def test_get_unknown_investigation_events(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "statuses.sqlite"
+    asyncio.run(initialize_status_store(database))
+
+    investigation_id = UUID(
+        "00000000-0000-4000-8000-000000000061"
+    )
+
+    with TestClient(create_app(AsyncMock())) as client:
+        client.app.state.status_db = database
+        response = client.get(
+            f"/investigations/{investigation_id}/events"
+        )
+
+    assert response.status_code == 404

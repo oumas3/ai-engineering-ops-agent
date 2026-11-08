@@ -18,6 +18,7 @@ from ops_agent.api_status_store import read_investigation_status , list_investig
 from ops_agent.api_runner import InvestigationRunner
 from ops_agent.report_store import ReportRunNotFound
 from ops_agent.api_reader import read_investigation
+from ops_agent.api_status_store import initialize_status_store
 from ops_agent.api_decisions import (
     InvestigationNotFound,
     IssueCreationDisabled,
@@ -27,7 +28,8 @@ from ops_agent.api_decisions import (
 )
 from ops_agent.api_status_store import save_investigation_status
 from ops_agent.api_models import InvestigationDecisionRequest,ApprovalStatusResponse
-
+from ops_agent.api_models import InvestigationEventResponse
+from ops_agent.api_status_store import read_investigation_events
 
 StartRunner = Callable[[StartInvestigationRequest], Awaitable[UUID]]
 
@@ -48,6 +50,7 @@ def create_app(start_runner: StartRunner | None = None) -> FastAPI:
         runner = InvestigationRunner(runs_dir)
         app.state.start_runner = runner.start
         app.state.status_db = runner.status_db
+        await initialize_status_store(runner.status_db)
         execute = partial(
             execute_investigation,
             allow_create_issue=app.state.allow_create_issue,
@@ -81,6 +84,38 @@ def create_app(start_runner: StartRunner | None = None) -> FastAPI:
             database,
             limit,
         )
+
+    @app.get(
+        "/investigations/{investigation_id}/events",
+        response_model=list[InvestigationEventResponse],
+    )
+    async def get_investigation_events(
+        investigation_id: UUID,
+    ) -> list[InvestigationEventResponse]:
+        database = app.state.status_db
+
+        if database is None:
+            raise HTTPException(
+                status_code=503,
+                detail="Investigation event storage is unavailable.",
+            )
+
+        current = await read_investigation_status(
+            database,
+            investigation_id,
+        )
+
+        if current is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Investigation not found.",
+            )
+
+        return await read_investigation_events(
+            database,
+            investigation_id,
+        )
+
 
     @app.get(
         "/investigations/{investigation_id}/status",
@@ -227,7 +262,7 @@ def create_app(start_runner: StartRunner | None = None) -> FastAPI:
             status_code=status.HTTP_204_NO_CONTENT
         )
 
-    
+
     @app.get("/", include_in_schema=False)
     async def home() -> FileResponse:
         page = Path(__file__).resolve().parent / "web" / "index.html"
