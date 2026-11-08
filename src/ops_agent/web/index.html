@@ -280,6 +280,52 @@
   font-weight: 700;
 }
 
+.history-section {
+  margin-bottom: 48px;
+}
+
+.history-list {
+  display: grid;
+  gap: 10px;
+}
+
+.history-item {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  text-align: left;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+
+.history-item:hover {
+  background: var(--surface2);
+  border-color: var(--accent);
+}
+
+.history-id {
+  font: 12px var(--mono);
+  overflow-wrap: anywhere;
+}
+
+.history-status {
+  font-size: 12px;
+  color: var(--accent);
+}
+
+.history-item[data-status="failed"] .history-status {
+  color: #f0a6a6;
+}
+
+#history-message {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+
   </style>
 </head>
 <body>
@@ -310,7 +356,18 @@
         <label class="checkbox-row"><input id="analyse" type="checkbox"> Include optional AI analysis</label>
         <p id="message" role="status" aria-live="polite"></p>
       </form>
-    </section>
+</section>
+<section class="history-section" aria-label="Investigation history">
+  <div class="result-header">
+    <h2>Recent investigations</h2>
+    <button id="history-refresh" class="secondary" type="button">
+      Refresh history
+    </button>
+  </div>
+  <p id="history-message" role="status"></p>
+  <div id="history-list" class="history-list"></div>
+</section>
+
     <section id="results" class="results-section" aria-label="Investigation results" hidden>
       <div class="result-header">
         <h2>Investigation results</h2>
@@ -675,6 +732,97 @@ async function pollInvestigation(id) {
     }
     approveButton.addEventListener("click", () => submitDecision("approved"));
     rejectButton.addEventListener("click", () => submitDecision("rejected"));
+
+const historyList = document.getElementById("history-list");
+const historyMessage = document.getElementById("history-message");
+const historyRefresh = document.getElementById("history-refresh");
+
+function openHistory(id) {
+  stopPolling();
+
+  activeId = id;
+  sawApproval = false;
+
+  cards.replaceChildren();
+  results.hidden = false;
+  approvalPanel.hidden = true;
+  decisionButtons.hidden = true;
+  lifecycleFlow.hidden = true;
+  lifecycleStatus.hidden = true;
+  lifecycleStatus.dataset.status = "";
+
+  document.getElementById("investigation-id").textContent = id;
+  document.getElementById("json-link").href =
+    `/investigations/${encodeURIComponent(id)}`;
+
+  message.textContent = "Loading saved investigation...";
+
+  startPolling(id);
+  results.scrollIntoView({ behavior: "smooth" });
+}
+
+async function refreshHistory() {
+  historyRefresh.disabled = true;
+  historyMessage.textContent = "Loading investigations...";
+
+  try {
+    const response = await fetch("/investigations?limit=20", {
+      cache: "no-store"
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const investigations = await response.json();
+
+    if (!Array.isArray(investigations)) {
+      throw new Error("Invalid history response");
+    }
+
+    historyList.replaceChildren();
+
+    for (const investigation of investigations) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "history-item";
+      button.dataset.status = investigation.status;
+      button.title = investigation.investigation_id;
+
+      const id = document.createElement("span");
+      id.className = "history-id";
+      id.textContent =
+        investigation.investigation_id.slice(0, 8) + "…";
+
+      const status = document.createElement("span");
+      status.className = "history-status";
+      status.textContent =
+        investigation.status.replaceAll("_", " ");
+
+      button.append(id, status);
+
+      button.addEventListener("click", () => {
+        openHistory(investigation.investigation_id);
+      });
+
+      historyList.appendChild(button);
+    }
+
+    historyMessage.textContent = investigations.length === 0
+      ? "No investigations yet."
+      : `${investigations.length} recent investigations`;
+
+  } catch (error) {
+    historyMessage.textContent =
+      "Unable to load history: " + error.message;
+  } finally {
+    historyRefresh.disabled = false;
+  }
+}
+
+historyRefresh.addEventListener("click", refreshHistory);
+refreshHistory();
+
   </script>
 </body>
 </html>

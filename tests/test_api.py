@@ -321,3 +321,63 @@ def test_get_unknown_lifecycle_status(
     assert response.json()["detail"] == (
         "Investigation status not found."
     )
+
+
+
+def test_list_investigations_returns_latest_first(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "statuses.sqlite"
+
+    first_id = UUID("00000000-0000-4000-8000-000000000001")
+    second_id = UUID("00000000-0000-4000-8000-000000000002")
+
+    async def prepare_database() -> None:
+        await initialize_status_store(database)
+
+        await save_investigation_status(
+            database, first_id, "completed"
+        )
+
+        await save_investigation_status(
+            database, second_id, "failed", "Test failure"
+        )
+
+    asyncio.run(prepare_database())
+
+    with TestClient(create_app(AsyncMock())) as client:
+        client.app.state.status_db = database
+
+        response = client.get("/investigations?limit=1")
+
+    assert response.status_code == 200
+
+    history = response.json()
+
+    assert len(history) == 1
+    assert history[0]["investigation_id"] == str(second_id)
+    assert history[0]["status"] == "failed"
+    assert history[0]["error"] == "Test failure"
+
+
+def test_list_investigations_empty_history(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "statuses.sqlite"
+    asyncio.run(initialize_status_store(database))
+
+    with TestClient(create_app(AsyncMock())) as client:
+        client.app.state.status_db = database
+        response = client.get("/investigations")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_list_investigations_invalid_limit() -> None:
+    with TestClient(create_app(AsyncMock())) as client:
+        response_low = client.get("/investigations?limit=0")
+        response_high = client.get("/investigations?limit=101")
+
+    assert response_low.status_code == 422
+    assert response_high.status_code == 422

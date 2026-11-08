@@ -10,6 +10,36 @@ from ops_agent.api_models import (
 )
 
 
+
+async def list_investigation_statuses(
+    database_path: Path,
+    limit: int = 20,
+) -> list[InvestigationStatusResponse]:
+    if not database_path.is_file():
+        return []
+
+    async with aiosqlite.connect(str(database_path)) as db:
+        async with db.execute(
+            """
+            SELECT investigation_id, status, error
+            FROM investigations
+            ORDER BY rowid DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ) as cursor:
+            rows = await cursor.fetchall()
+
+    return [
+        InvestigationStatusResponse(
+            investigation_id=UUID(row[0]),
+            status=row[1],
+            error=row[2],
+        )
+        for row in rows
+    ]
+
+
 async def initialize_status_store(database_path: Path) -> None:
     database_path.parent.mkdir(parents=True, exist_ok=True)
 
