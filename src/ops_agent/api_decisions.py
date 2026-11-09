@@ -13,6 +13,7 @@ from mcp import Client, StdioServerParameters
 from ops_agent.models import AgentPermissions
 from ops_agent.persistence import create_serializer
 from ops_agent.workflow import build_graph
+from ops_agent.api_status_store import initialize_status_store
 
 
 class InvestigationNotFound(Exception):
@@ -99,6 +100,8 @@ async def apply_decision(
         args=["-m", "ops_agent.mcp_server"],
         env={"PYTHONPATH": str(src_dir)},
     )
+    status_db = database.parent / "investigation_statuses.sqlite"
+    await initialize_status_store(status_db)
 
     decision_error: Exception | None = None
 
@@ -113,6 +116,8 @@ async def apply_decision(
                 client,
                 checkpointer=saver,
                 permissions=AgentPermissions(can_create_issue=True),
+                trace_database=status_db,
+                investigation_id=investigation_id,
             )
 
             try:

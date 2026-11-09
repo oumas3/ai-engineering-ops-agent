@@ -13,6 +13,8 @@ from ops_agent.api_models import (
     InvestigationStatusResponse,
     InvestigationEventResponse,
 )
+from typing import Literal
+from ops_agent.api_models import NodeExecutionResponse
 
 
 async def list_investigation_statuses(
@@ -48,6 +50,35 @@ async def initialize_status_store(database_path: Path) -> None:
     database_path.parent.mkdir(parents=True, exist_ok=True)
 
     async with aiosqlite.connect(str(database_path)) as db:
+
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS node_executions (
+                execution_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                investigation_id TEXT NOT NULL,
+                node_name TEXT NOT NULL,
+                outcome TEXT NOT NULL CHECK (
+                    outcome IN (
+                        'completed',
+                        'failed',
+                        'interrupted'
+                    )
+                ),
+                started_at TEXT NOT NULL,
+                duration_ms INTEGER NOT NULL CHECK (
+                    duration_ms >= 0
+                ),
+                error_type TEXT
+            )
+        """)
+
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_node_executions
+            ON node_executions (
+                investigation_id,
+                execution_id
+            )
+        """)
+
         await db.execute("""
             CREATE TABLE IF NOT EXISTS investigations (
                 investigation_id TEXT PRIMARY KEY,
@@ -181,6 +212,77 @@ async def read_investigation_events(
             status=row[1],
             error=row[2],
             occurred_at=row[3],
+        )
+        for row in rows
+    ]
+
+async def save_node_execution(
+    database_path: Path,
+    investigation_id: UUID,
+    node_name: str,
+    outcome: Literal["completed", "failed", "interrupted"],
+    started_at: str,
+    duration_ms: int,
+    error_type: str | None = None,
+) -> None:
+    async with aiosqlite.connect(str(database_path)) as db:
+        await db.execute(
+            """
+            INSERT INTO node_executions (
+                investigation_id,
+                node_name,
+                outcome,
+                started_at,
+                duration_ms,
+                error_type
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                str(investigation_id),
+                node_name,
+                outcome,
+                started_at,
+                duration_ms,
+                error_type,
+            ),
+        )
+        await db.commit()
+
+async def read_node_executions(
+    database_path: Path,
+    investigation_id: UUID,
+) -> list[NodeExecutionResponse]:
+    if not database_path.is_file():
+        return []
+
+    async with aiosqlite.connect(str(database_path)) as db:
+        async with db.execute(
+            """
+            SELECT
+                execution_id,
+                node_name,
+                outcome,
+                started_at,
+                duration_ms,
+                error_type
+            FROM node_executions
+            WHERE investigation_id = ?
+            ORDER BY execution_id ASC
+            """,
+            (str(investigation_id),),
+        ) as cursor:
+            rows = await cursor.fetchall()
+
+    return [
+        NodeExecutionResponse(
+            execution_id=row[0],
+            investigation_id=investigation_id,
+            node_name=row[1],
+            outcome=row[2],
+            started_at=row[3],
+            duration_ms=row[4],
+            error_type=row[5],
         )
         for row in rows
     ]

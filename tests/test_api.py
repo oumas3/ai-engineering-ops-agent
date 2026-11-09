@@ -2,7 +2,8 @@ from unittest.mock import AsyncMock
 from uuid import UUID
 
 import asyncio
-
+from datetime import datetime, timezone
+from ops_agent.api_status_store import save_node_execution
 from ops_agent.api_status_store import (
     initialize_status_store,
     read_investigation_status,
@@ -514,3 +515,48 @@ def test_unknown_investigation_metrics(
         )
 
     assert response.status_code == 404
+
+
+def test_get_investigation_traces(tmp_path: Path) -> None:
+    database = tmp_path / "statuses.sqlite"
+    investigation_id = UUID(
+        "00000000-0000-4000-8000-000000000093"
+    )
+
+    async def prepare() -> None:
+        await initialize_status_store(database)
+        await save_investigation_status(
+            database,
+            investigation_id,
+            "completed",
+        )
+        await save_node_execution(
+            database_path=database,
+            investigation_id=investigation_id,
+            node_name="collect_ci",
+            outcome="completed",
+            started_at="2026-11-09T12:00:00.000Z",
+            duration_ms=142,
+        )
+
+    asyncio.run(prepare())
+
+    with TestClient(create_app(AsyncMock())) as client:
+        client.app.state.status_db = database
+
+        response = client.get(
+            f"/investigations/{investigation_id}/traces"
+        )
+
+    assert response.status_code == 200
+
+    traces = response.json()
+    assert len(traces) == 1
+
+    trace = traces[0]
+    assert trace["investigation_id"] == str(investigation_id)
+    assert trace["node_name"] == "collect_ci"
+    assert trace["outcome"] == "completed"
+    assert trace["duration_ms"] == 142
+    assert trace["error_type"] is None
+    assert trace["started_at"]

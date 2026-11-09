@@ -32,6 +32,8 @@ from ops_agent.api_models import InvestigationEventResponse
 from ops_agent.api_status_store import read_investigation_events
 from ops_agent.api_models import InvestigationMetricsResponse
 from ops_agent.observability import compute_execution_duration_ms
+from ops_agent.api_models import NodeExecutionResponse
+from ops_agent.api_status_store import read_node_executions
 
 StartRunner = Callable[[StartInvestigationRequest], Awaitable[UUID]]
 
@@ -85,6 +87,37 @@ def create_app(start_runner: StartRunner | None = None) -> FastAPI:
         return await list_investigation_statuses(
             database,
             limit,
+        )
+    
+    @app.get(
+        "/investigations/{investigation_id}/traces",
+        response_model=list[NodeExecutionResponse],
+    )
+    async def get_investigation_traces(
+        investigation_id: UUID,
+    ) -> list[NodeExecutionResponse]:
+        database = app.state.status_db
+
+        if database is None:
+            raise HTTPException(
+                status_code=503,
+                detail="Node tracing is unavailable.",
+            )
+
+        current = await read_investigation_status(
+            database,
+            investigation_id,
+        )
+
+        if current is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Investigation not found.",
+            )
+
+        return await read_node_executions(
+            database,
+            investigation_id,
         )
 
     @app.get(

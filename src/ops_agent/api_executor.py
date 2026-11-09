@@ -14,7 +14,7 @@ from ops_agent.persistence import create_serializer
 from ops_agent.state import create_initial_state
 from ops_agent.workflow import build_graph
 from ops_agent.api_models import InvestigationLifecycleStatus
-
+from ops_agent.api_status_store import initialize_status_store
 
 async def execute_investigation(
     job: InvestigationJob,
@@ -24,6 +24,8 @@ async def execute_investigation(
     src_dir = Path(__file__).resolve().parents[1]
     runtime_dir = src_dir.parent / "runtime"
     runtime_dir.mkdir(parents=True, exist_ok=True)
+    status_db = runtime_dir / "investigation_statuses.sqlite"
+    await initialize_status_store(status_db)
 
     params = StdioServerParameters(
         command=sys.executable,
@@ -47,14 +49,17 @@ async def execute_investigation(
                 AsyncGroq(api_key=os.environ["GROQ_API_KEY"], max_retries=0)
             )
 
+       
         graph = build_graph(
             mcp_client,
             checkpointer=checkpointer,
             llm_client=llm_client,
-            permissions=AgentPermissions(can_create_issue=allow_create_issue),
+            permissions=AgentPermissions(
+                can_create_issue=allow_create_issue
+            ),
+            trace_database=status_db,
+            investigation_id=job.investigation_id,
         )
-
-
         config = {
             "configurable": {
                 "thread_id": str(job.investigation_id)
