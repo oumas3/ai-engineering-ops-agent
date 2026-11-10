@@ -118,3 +118,12 @@ class InvestigationEventResponse(BaseModel):
 class InvestigationMetricsResponse(BaseModel):
     investigation_id: UUID
     execution_duration_ms: int | None
+
+class NodeExecutionResponse(BaseModel):
+    execution_id: int
+    investigation_id: UUID
+    node_name: str
+    outcome: Literal["completed", "failed", "interrupted"]
+    started_at: datetime
+    duration_ms: int
+    error_type: str | None = None

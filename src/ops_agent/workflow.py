@@ -8,15 +8,15 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 from typing import Literal
-from ops_agent.nodes import InvestigationNodes
 from ops_agent.state import InvestigationState, create_initial_state
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from ops_agent.models import AgentPermissions
-
 from groq import AsyncGroq
+from pathlib import Path
+from uuid import UUID
+from ops_agent.node_tracing import NodeFunction, trace_node
 
 from ops_agent.nodes import AnalysisNode, InvestigationNodes
-
 def route_after_approval(
     state: InvestigationState,
 ) -> Literal["create_issue", "finish"]:
@@ -31,6 +31,8 @@ def build_graph(
     interrupt_before: list[str] | None = None,
     permissions: AgentPermissions | None = None,
     llm_client: AsyncGroq | None = None,
+    trace_database: Path | None = None,
+    investigation_id: UUID | None = None,
 ) -> CompiledStateGraph:
     nodes = InvestigationNodes(
         client,
@@ -38,21 +40,38 @@ def build_graph(
         permissions=permissions,
     )
     builder = StateGraph(InvestigationState)
+    if (trace_database is None) != (investigation_id is None):
+        raise ValueError(
+            "trace_database and investigation_id "
+            "must be provided together."
+        )
 
-    
+    def add_traced_node(name: str, node: NodeFunction) -> None:
+        if trace_database is not None and investigation_id is not None:
+            node = trace_node(
+                name,
+                node,
+                database_path=trace_database,
+                investigation_id=investigation_id,
+            )
+
+        builder.add_node(name, node)
+
     if llm_client is not None:
         analysis_node = AnalysisNode(llm_client)
-        builder.add_node(
+        add_traced_node(
             "collect_analysis",
             analysis_node.collect_analysis,
         )
 
-    builder.add_node("collect_ci", nodes.collect_ci)
-    builder.add_node("collect_failed_tests", nodes.collect_failed_tests)
-    builder.add_node("collect_logs", nodes.collect_logs)
-    builder.add_node("collect_service_status", nodes.collect_service_status)
-    builder.add_node("prepare_issue", nodes.prepare_issue)
+    add_traced_node("collect_ci", nodes.collect_ci)
+    add_traced_node("collect_failed_tests", nodes.collect_failed_tests)
+    add_traced_node("collect_logs", nodes.collect_logs)
+    add_traced_node("collect_service_status", nodes.collect_service_status)
+    add_traced_node("prepare_issue", nodes.prepare_issue)
+
     builder.add_edge(START, "collect_ci")
+
 
     builder.add_conditional_edges(
         "collect_ci",
@@ -74,9 +93,8 @@ def build_graph(
         if checkpointer is None:
             raise ValueError("Approval requires a checkpointer.")
 
-        builder.add_node("request_approval", nodes.request_approval)
-        builder.add_node("create_issue", nodes.create_approved_issue)
-
+        add_traced_node("request_approval", nodes.request_approval)
+        add_traced_node("create_issue", nodes.create_approved_issue)
         builder.add_edge("prepare_issue", "request_approval")
 
         builder.add_conditional_edges(
