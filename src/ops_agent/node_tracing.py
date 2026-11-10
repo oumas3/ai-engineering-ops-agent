@@ -44,12 +44,15 @@ def trace_node(
 
         outcome = "failed"
         error_type = None
-
         try:
-            result = node(state)
+            if inspect.iscoroutinefunction(node):
+                result = await node(state)
+            else:
+                result = await asyncio.to_thread(node, state)
 
-            if inspect.isawaitable(result):
-                result = await result
+                if inspect.isawaitable(result):
+                    result = await result
+
 
             outcome = "completed"
             return result
