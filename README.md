@@ -1,156 +1,75 @@
 # AI Engineering Operations Agent
 
-A stateful engineering operations agent for investigating CI and deployment failures using structured evidence, LangGraph workflows, MCP tools, persistent checkpoints, optional LLM analysis, and human approval for write actions.
+A stateful engineering operations agent for investigating CI failures using validated evidence, MCP tools, LangGraph workflows, SQLite persistence, optional LLM analysis, and human approval for write actions.
 
-The project is built incrementally around reliability and control rather than autonomous action. It starts from reproducible local engineering evidence and gradually introduces agentic capabilities while keeping validation, permissions, and human review explicit.
+Built as an incremental **AI engineering and reliability** project: evidence is collected before hypotheses are proposed, and write operations require explicit permission and approval.
 
-## Current capabilities
+**Project status:** Parts 1–16 implemented. The latest locally reported full test run was **106 passed** (November 2026). This result was reported from local pytest execution, not independently verified by a GitHub Actions run. Automated CI is a planned improvement.
 
-The agent can:
+## What it does
 
-- Start investigations from stored engineering report runs.
-- Retrieve and validate CI status with Pydantic.
-- Collect failed-test evidence for failed CI runs.
-- Read structured application logs.
-- Retrieve service-health information.
-- Check that evidence belongs to the same CI run, service, and environment.
-- Continue collecting useful evidence when another source is unavailable.
-- Expose engineering tools through a custom MCP server.
-- Execute investigations through a stateful LangGraph workflow.
-- Retry bounded read-tool timeouts.
-- Persist investigation state in SQLite.
-- Resume interrupted investigations from checkpoints.
-- Optionally analyse evidence using Groq.
-- Store structured observations, hypotheses, recommended checks, and limitations.
-- Generate an issue proposal from collected evidence.
-- Require explicit permission and human approval before issue creation.
-- Accept approval or rejection through FastAPI.
-- Create approved issue records locally.
-- Prevent duplicate issue writes using request IDs.
-- Start investigations asynchronously through HTTP.
-- Retrieve persisted investigation results through HTTP.
-- Serialize large CI identifiers safely for browser and JavaScript clients.
-- Expose interactive API documentation through FastAPI Swagger.
+- Accepts an existing report-run UUID and queues an investigation through FastAPI.
+- Uses a custom MCP server to collect CI status, failed tests, application logs, and service health.
+- Validates evidence with Pydantic and checks CI run, service, and environment consistency.
+- Uses LangGraph for stateful, conditional execution. A passing CI report ends the investigation early; a failed report triggers further evidence collection.
+- Handles bounded read-tool timeouts and preserves useful partial evidence when collection fails.
+- Optionally generates structured observations, hypotheses, recommended checks, and limitations using Groq.
+- Prepares an issue proposal and requires explicit human approval before creating a **local JSON issue record**.
+- Persists checkpoints, investigation lifecycle history, timestamps, and node-level execution traces in SQLite.
+- Exposes a browser dashboard for starting, reviewing, approving/rejecting, and reopening investigations.
+
+**Not a production incident-remediation service:** evidence sources are local, issue creation is local, and LLM hypotheses are not validated root causes.
 
 ## Architecture
 
 ```mermaid
 flowchart TD
-    User["User / API Client"] --> API["FastAPI"]
-
-    API --> Runner["Async Investigation Runner"]
-
-    Runner --> Graph["LangGraph Workflow"]
-
-    Graph --> MCPClient["MCP Client"]
-    MCPClient --> MCPServer["Custom MCP Server"]
-
-    MCPServer --> CI["CI Status Tool"]
-    MCPServer --> Tests["Failed Tests Tool"]
-    MCPServer --> Logs["Logs Tool"]
-    MCPServer --> Health["Service Status Tool"]
-
-    CI --> Reports["Runtime / Mock Engineering Reports"]
-    Tests --> Reports
-    Logs --> Reports
-    Health --> Reports
-
-    Graph --> Analysis{"Analysis enabled?"}
-
-    Analysis -->|Yes| Groq["Groq LLM"]
-    Analysis -->|No| Proposal["Issue Proposal"]
-    Groq --> Proposal
-
-    Proposal --> Permission{"Issue creation permitted?"}
-
-    Permission -->|No| Finish["Finish Investigation"]
-    Permission -->|Yes| Approval["Human Approval Interrupt"]
-
-    Approval -->|Rejected| Finish
-    Approval -->|Approved| Issue["Create Local Issue"]
-
-    Graph <--> SQLite["SQLite Checkpoints"]
-
-    API --> Result["Persisted Investigation Result"]
-    Result --> User
+    UI[Browser dashboard] --> API[FastAPI]
+    CLIENT[API client] --> API
+    API --> RUNNER[Async investigation queue]
+    RUNNER --> GRAPH[LangGraph workflow]
+    GRAPH --> MCP[MCP client / local MCP server]
+    MCP --> EVIDENCE[CI, tests, logs, service health]
+    GRAPH --> LLM[Optional Groq analysis]
+    GRAPH --> PROPOSAL[Issue proposal]
+    PROPOSAL --> APPROVAL{Write enabled and human approved?}
+    APPROVAL -->|Yes| ISSUE[Local issue JSON]
+    APPROVAL -->|No| END[Finish without issue]
+    GRAPH <--> CHECKPOINTS[(SQLite checkpoints)]
+    RUNNER --> OBS[(SQLite statuses and lifecycle events)]
+    GRAPH --> OBS
+    API --> OBS
+    API --> CHECKPOINTS
 ```
 
-## Core design principles
+### Execution and approval model
 
-### Validate at boundaries
+For a failed CI run, the graph can execute:
 
-External and stored evidence is validated using Pydantic before being accepted into investigation state.
+```text
+collect_ci
+  -> collect_failed_tests
+  -> collect_logs
+  -> collect_service_status
+  -> collect_analysis (optional)
+  -> prepare_issue
+  -> request_approval (only when issue creation is enabled)
+  -> create_issue (only after approval)
+```
 
-### Keep evidence tied to the investigation
-
-CI reports, failed tests, logs, and service status are checked for matching run, service, and environment identifiers.
-
-### Preserve partial evidence
-
-A missing or failed evidence source should not automatically discard evidence successfully collected elsewhere.
-
-### Separate evidence from conclusions
-
-Logs and reports are treated as evidence.
-
-Model-generated hypotheses are explicitly labelled as unverified and do not become established root causes automatically.
-
-### Human approval for write actions
-
-The agent can prepare an issue proposal automatically, but issue creation requires:
-
-1. write permission,
-2. a persisted proposal,
-3. explicit human approval.
-
-### Persist before acting
-
-LangGraph checkpoints are stored in SQLite so interrupted investigations can be inspected and resumed safely.
-
-## Project structure
-
-| Path | Purpose |
-|---|---|
-| `src/ops_agent/models.py` | Core Pydantic domain models |
-| `src/ops_agent/state.py` | LangGraph investigation state |
-| `src/ops_agent/tools.py` | Local engineering tools and issue creation |
-| `src/ops_agent/mcp_server.py` | Custom MCP server |
-| `src/ops_agent/nodes.py` | Evidence, analysis, approval, and action nodes |
-| `src/ops_agent/workflow.py` | LangGraph workflow construction and routing |
-| `src/ops_agent/persistence.py` | Checkpoint serialization |
-| `src/ops_agent/api.py` | FastAPI application |
-| `src/ops_agent/api_models.py` | API request and response models |
-| `src/ops_agent/api_runner.py` | Asynchronous investigation queue |
-| `src/ops_agent/api_executor.py` | Investigation execution lifecycle |
-| `src/ops_agent/api_reader.py` | Persisted investigation retrieval |
-| `src/ops_agent/api_decisions.py` | Approval/rejection resume logic |
-| `runtime/runs/` | Generated engineering report runs |
-| `runtime/issues/` | Approved local issue records |
-| `runtime/checkpoints.sqlite` | Persisted LangGraph checkpoints |
-| `services/backend/` | Local backend used for engineering-failure scenarios |
-| `tests/` | Automated unit and integration tests |
-| `requirements.txt` | Python dependencies |
+The approval node can interrupt the graph. After a user approves or rejects, the investigation resumes from its persisted checkpoint. An approval does not bypass server-side permission checks.
 
 ## Requirements
 
-- Python 3.12
-- Dependencies declared in `requirements.txt`
+- Python **3.12**
+- Windows PowerShell for the commands below (the Python code itself is not Windows-specific)
+- Dependencies from `requirements.txt`
 
-Main runtime dependencies include:
+Runtime components include FastAPI, Uvicorn, Pydantic, LangGraph, the MCP Python SDK, SQLite checkpointing, Groq, and HTTPX.
 
-- FastAPI
-- Uvicorn
-- Pydantic
-- MCP
-- LangGraph
-- SQLite checkpoint support
-- Groq
-- HTTPX
-- pytest
+## Quick start (PowerShell)
 
-## Setup
-
-The examples below use Windows PowerShell.
+### 1. Install
 
 ```powershell
 git clone https://github.com/oumas3/ai-engineering-ops-agent.git
@@ -158,399 +77,185 @@ cd ai-engineering-ops-agent
 
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
-
 python -m pip install -r requirements.txt
-```
-
-Set the source directory:
-
-```powershell
 $env:PYTHONPATH = "src"
 ```
 
-## Run the FastAPI service
+### 2. Create a local demonstration report run
 
-Start the API with:
+The API only accepts report-run IDs that already exist under `runtime/runs/<run-id-without-hyphens>/`. Generated runtime data is not committed to Git.
+
+The repository contains sample evidence in `data/`. Copy it into a new run directory:
+
+```powershell
+$runId = [guid]::NewGuid().ToString("N")
+$runDir = "runtime/runs/$runId"
+New-Item -ItemType Directory -Force -Path $runDir | Out-Null
+Copy-Item "data/*.json" $runDir
+
+# The investigation executor uses the 'local' environment.
+# Align the copied service-health fixture for a consistent demo.
+$healthPath = "$runDir/service_status.json"
+$health = Get-Content $healthPath -Raw | ConvertFrom-Json
+$health.environment = "local"
+$health | ConvertTo-Json -Depth 5 | Set-Content $healthPath
+
+Write-Host "Demo report run: $runId"
+```
+
+The bundled CI example is a failed backend run, so it exercises evidence collection and proposal generation. Keep the printed `$runId` for the next step.
+
+### 3. Start FastAPI and open the dashboard
 
 ```powershell
 $env:PYTHONPATH = "src"
 python -m uvicorn ops_agent.api:create_app --factory --reload
 ```
 
-Open the interactive API documentation:
+Open:
 
-```text
-http://127.0.0.1:8000/docs
+- **Dashboard:** http://127.0.0.1:8000/
+- **API documentation:** http://127.0.0.1:8000/docs
+
+Paste your newly generated report-run ID into the dashboard and select **Start investigation**. Optional AI analysis is disabled by default.
+
+Or submit it through PowerShell in a second terminal:
+
+```powershell
+$body = @{ report_run = $runId; analyse = $false } | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/investigations" -ContentType "application/json" -Body $body
 ```
 
-### API endpoints
+If you open a new terminal, define `$runId` again using the ID printed earlier.
 
-#### Start an investigation
+The POST returns HTTP **202 Accepted** and an `investigation_id`. The investigation runs asynchronously; its results become available through the API and dashboard as execution progresses.
 
-```http
-POST /investigations
+### Optional: enable AI analysis
+
+Set `GROQ_API_KEY` in the environment before starting the server, then submit an investigation with `analyse` set to `true`.
+
+```powershell
+$env:GROQ_API_KEY = "<your-key>"
 ```
 
-Example request:
+Do not commit API keys or local `.env` files. If `analyse=true` is requested without a configured Groq key, the API rejects the request.
 
-```json
-{
-  "report_run": "8446db8b15b44d6faf077f7d31dc0ac2",
-  "analyse": false
-}
-```
+### Optional: enable issue creation
 
-Example response:
-
-```json
-{
-  "investigation_id": "df091d92-2473-4135-9bfe-d0c89881a648"
-}
-```
-
-The API returns HTTP `202 Accepted` because the investigation runs asynchronously.
-
-#### Retrieve an investigation
-
-```http
-GET /investigations/{investigation_id}
-```
-
-The response can include:
-
-- CI status,
-- failed tests,
-- logs,
-- service health,
-- structured model analysis,
-- issue proposal,
-- collection errors.
-
-Large CI run identifiers are serialized as strings at the API boundary so browsers and JavaScript clients do not lose integer precision.
-
-#### Submit a human decision
-
-```http
-POST /investigations/{investigation_id}/decision
-```
-
-Example:
-
-```json
-{
-  "decision": "approved"
-}
-```
-
-or:
-
-```json
-{
-  "decision": "rejected"
-}
-```
-
-Successful decisions return:
-
-```text
-204 No Content
-```
-
-## Human approval and issue creation
-
-Issue creation is disabled by default.
-
-To enable the approval path:
+Issue creation is **disabled by default**. To enable the approval path, set the flag before starting FastAPI:
 
 ```powershell
 $env:OPS_ALLOW_CREATE_ISSUE = "1"
-$env:PYTHONPATH = "src"
-
-python -m uvicorn ops_agent.api:create_app --factory --reload
 ```
 
-For a failed CI investigation, the workflow becomes:
+A failed CI investigation with a proposal can then pause for human approval. Approval or rejection is submitted from the dashboard or through `POST /investigations/{investigation_id}/decision`.
 
-```text
-CI failure
-    ↓
-failed tests
-    ↓
-logs
-    ↓
-service health
-    ↓
-optional model analysis
-    ↓
-issue proposal
-    ↓
-human approval
-   ↙       ↘
-reject    approve
-  ↓          ↓
-finish   create issue
-```
+Approved issues are written only to `runtime/issues/` as local JSON records. The agent does **not** automatically create GitHub Issues, apply patches, or deploy fixes.
 
-Approved issue records are written to:
+## HTTP API
 
-```text
-runtime/issues/
-```
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `POST` | `/investigations` | Queue a new investigation; returns `202` and its UUID |
+| `GET` | `/investigations?limit=20` | List recent investigations; validated limit 1–100 |
+| `GET` | `/investigations/{id}` | Retrieve the latest persisted evidence snapshot |
+| `GET` | `/investigations/{id}/status` | Read current lifecycle status |
+| `GET` | `/investigations/{id}/events` | Read timestamped lifecycle events in order |
+| `GET` | `/investigations/{id}/metrics` | Read calculated execution duration |
+| `GET` | `/investigations/{id}/traces` | Read node executions and durations |
+| `GET` | `/investigations/{id}/approval` | Check whether approval is pending and enabled |
+| `POST` | `/investigations/{id}/decision` | Approve or reject a pending write decision |
+| `GET` | `/` | Browser dashboard |
 
-Issue creation is currently local and intentionally controlled.
+An investigation's lifecycle status is one of `queued`, `running`, `awaiting_approval`, `completed`, or `failed`.
 
-## Optional LLM analysis
+### Observability
 
-An investigation can request structured analysis using:
+The dashboard displays investigation history, lifecycle progress, timestamped events, execution duration, and a node execution trace table.
 
-```json
-{
-  "analyse": true
-}
-```
+Each node trace contains:
 
-The model produces:
+- Node name and investigation UUID
+- Outcome: `completed`, `failed`, or `interrupted`
+- Start timestamp and duration in milliseconds
+- Exception type when applicable, without exposing exception-message contents
 
-- observations,
-- hypotheses,
-- recommended checks,
-- limitations.
+Execution duration is calculated from the `running` lifecycle event to the first terminal/approval event; it **excludes time waiting for human approval**. Node traces record individual node execution attempts, including interrupted and resumed attempts.
 
-Model hypotheses remain unverified.
+Older investigations created before event tracing may have empty event or trace histories.
 
-Recommended checks are suggestions and are not automatically executed.
+## Persistence and local files
 
-If analysis fails or times out, the investigation preserves collected engineering evidence and can still generate an issue proposal.
+| Path | Purpose |
+|---|---|
+| `data/` | Tracked sample engineering evidence |
+| `runtime/runs/<run-id>/` | Local report-run input files |
+| `runtime/checkpoints.sqlite` | Persisted LangGraph checkpoints |
+| `runtime/investigation_statuses.sqlite` | Investigation statuses, lifecycle events, and node traces |
+| `runtime/issues/` | Locally created, approved issue records |
+| `src/ops_agent/workflow.py` | LangGraph graph construction and routing |
+| `src/ops_agent/nodes.py` | Evidence, analysis, approval, and write nodes |
+| `src/ops_agent/mcp_server.py` | Custom MCP tool server |
+| `src/ops_agent/api.py` | FastAPI routes and lifecycle |
+| `src/ops_agent/api_runner.py` | Queued investigation worker |
+| `src/ops_agent/api_executor.py` | Graph invocation and checkpoint management |
+| `src/ops_agent/api_decisions.py` | Approval checks and graph resumption |
+| `src/ops_agent/api_status_store.py` | SQLite status, event, and trace persistence |
+| `src/ops_agent/node_tracing.py` | Node timing and failure/interrupt tracing |
+| `src/ops_agent/observability.py` | Execution-duration calculations |
+| `src/ops_agent/web/index.html` | Browser dashboard |
+| `tests/` | Automated tests |
 
-## Persistence
+The `runtime/` directory and `.env` files are ignored by Git.
 
-Investigations use LangGraph checkpoints stored in:
+## Testing
 
-```text
-runtime/checkpoints.sqlite
-```
-
-Each investigation uses its UUID as the LangGraph thread ID.
-
-Persistence allows the API to:
-
-- retrieve previous investigation state,
-- inspect collected evidence,
-- detect pending approval interrupts,
-- resume a paused workflow after approval or rejection.
-
-## Tests
-
-Run the complete test suite with:
+Activate the environment and run:
 
 ```powershell
-python -m pytest -q --basetemp=.\.pytest-tmp-01
+$env:PYTHONPATH = "src"
+python -m pytest -q --basetemp=.\.pytest-tmp-all
+git diff --check
 ```
 
-Latest verified result:
+**Last reported local result: 106 passed (November 2026).** This is a development baseline, not a claim that GitHub CI has executed the suite.
 
-```text
-81 passed
-```
+Tests cover validation, MCP integration, conditional routing, read-tool timeouts, SQLite checkpointing, approval and issue-creation safeguards, HTTP responses, lifecycle events, duration calculations, node tracing, interrupts, resumption, and trace-storage failures.
 
-The tests cover areas including:
+## Design and safety principles
 
-- Pydantic validation,
-- local tool behavior,
-- MCP integration,
-- LangGraph routing,
-- timeout and retry handling,
-- SQLite persistence,
-- approval interrupts,
-- issue creation,
-- structured LLM analysis,
-- API request validation,
-- asynchronous investigation submission,
-- persisted investigation retrieval,
-- approval/rejection API behavior,
-- large CI run-ID serialization.
+1. **Validate at boundaries.** Pydantic checks the structure of external evidence, and the workflow verifies matching run/service/environment identifiers.
+2. **Separate evidence from inference.** AI hypotheses and recommended checks are labelled as unverified.
+3. **Preserve partial evidence.** An unavailable tool should not discard evidence from successful sources.
+4. **Require explicit approval for writes.** Issue creation requires server permission, a proposal, and a human decision.
+5. **Observe without deciding.** Trace-storage failures are logged rather than used to change a node's decision.
 
-## Runtime validation
+This project is intended for **local development and evaluation**. The API does not currently implement production-grade authentication or remote issue-tracker integration. Do not expose its write-enabled interface directly to the public internet.
 
-Part 12 was also verified manually through the running FastAPI service.
+## Development roadmap
 
-The following flows were exercised successfully:
-
-### Passing CI investigation
-
-```text
-POST /investigations
-        ↓
-background worker
-        ↓
-MCP CI evidence
-        ↓
-LangGraph
-        ↓
-SQLite checkpoint
-        ↓
-GET /investigations/{id}
-        ↓
-200 OK
-```
-
-The workflow correctly stopped after receiving a passing CI status.
-
-### Failed CI investigation
-
-A failed backend readiness scenario successfully collected:
-
-- CI failure information,
-- failed-test evidence,
-- database timeout logs,
-- degraded service status,
-- an issue proposal.
-
-### Rejection flow
-
-The graph paused for approval and resumed successfully after:
-
-```json
-{
-  "decision": "rejected"
-}
-```
-
-No issue was created.
-
-### Approval flow
-
-A fresh failed investigation was approved with:
-
-```json
-{
-  "decision": "approved"
-}
-```
-
-The workflow resumed from its persisted LangGraph checkpoint and created a local issue JSON record.
-
-### Large identifier safety
-
-A CI run ID such as:
-
-```text
-6708014345158128627
-```
-
-exceeds JavaScript's safe integer range.
-
-Internally it remains a Python integer, while API responses serialize it as:
-
-```json
-{
-  "run_id": "6708014345158128627"
-}
-```
-
-This preserves the identifier exactly in browsers and JavaScript clients.
-
-## Project roadmap
-
-### Completed
-
-- [x] **Part 1 — Project foundation and CI reports**
-- [x] **Part 2 — Failed-test evidence**
-- [x] **Part 3 — Log collection**
-- [x] **Part 4 — Service health**
-- [x] **Part 5 — Custom MCP server and client**
-- [x] **Part 6 — Stateful LangGraph investigation**
-- [x] **Part 7 — Timeouts and retries**
-- [x] **Part 8 — Persistent investigations**
-- [x] **Part 9 — Permissions, approval, and local issue creation**
-- [x] **Part 10 — Real local engineering evidence**
-- [x] **Part 11 — Structured LLM analysis**
-- [x] **Part 12 — Async FastAPI interface**
-  - Start investigations through HTTP.
-  - Retrieve persisted status, evidence, analysis, and proposals.
-  - Submit approval or rejection decisions.
-  - Resume interrupted LangGraph workflows.
-  - Manage MCP, database, and optional model-client lifecycles.
-  - Validate real runtime behavior.
-  - Preserve large identifiers safely at the API boundary.
-
-### Next
-
-- [ ] **Part 12B — Minimal browser interface**
-  - Start investigations from a browser form.
-  - Display investigation progress and evidence.
-  - Show analysis and collection errors.
-  - Present the exact issue proposal.
-  - Approve or reject through the browser.
-  - Keep all permission enforcement in the backend.
-
-### Later milestones
-
-- [ ] **Part 13 — Agent harness and advanced workflows**
-  - Add bounded model-driven selection of permitted read tools.
-  - Validate tool arguments.
-  - Enforce execution budgets.
-  - Extend routing, retry, and fallback policies.
-  - Preserve approval requirements for write actions.
-
-- [ ] **Part 14 — Tracing and observability**
-  - Correlate investigations, nodes, and tool calls.
-  - Record latency, failures, retries, and model usage.
-  - Improve diagnosis of failed or slow investigations.
-
-- [ ] **Part 15 — Agent evaluation**
-  - Build repeatable investigation scenarios.
-  - Measure evidence grounding.
-  - Detect unsupported claims.
-  - Evaluate permission compliance.
-  - Compare prompts and models.
-
-- [ ] **Part 16 — Packaging, CI, and reproducible demo**
-  - Containerize the agent and API.
-  - Run project checks automatically in CI.
-  - Improve configuration documentation.
-  - Produce a reproducible end-to-end demonstration.
+| Milestone | Status |
+|---|---|
+| Parts 1–11: evidence collection, MCP, LangGraph, persistence, approval, LLM analysis | Complete |
+| Part 12: asynchronous FastAPI interface | Complete |
+| Part 12B: browser dashboard | Complete |
+| Part 13: investigation lifecycle status tracking | Complete |
+| Part 14: investigation history and reopening results | Complete |
+| Part 15: lifecycle observability and duration metrics | Complete |
+| Part 16: LangGraph node-level tracing | Complete |
+| Part 17: project quality, documentation, and automated CI | Planned |
+| Part 18: agent evaluation and regression scenarios | Planned |
 
 ## Current limitations
 
-- Engineering integrations are still primarily local.
-- Issue creation currently writes local JSON records rather than remote tracker issues.
-- Evidence collection follows a predefined graph.
-- Model-driven tool selection is not yet implemented.
-- Pydantic validates structure and types, not factual truth.
-- LLM hypotheses may be incorrect and require human review.
-- Recommended checks are not automatically executed.
-- Tracing and systematic agent evaluation are not implemented yet.
-- The browser interface is the next planned milestone.
-- Exact dependency locking is not yet included.
+- Inputs and issue outputs are local rather than connected to production CI or issue trackers.
+- The evidence-gathering workflow is predefined; dynamic model-driven tool planning is not implemented.
+- LLM analysis is optional and should not be treated as verified root cause.
+- Dependency versions are not fully locked for reproducible installs.
+- CI automation and systematic agent evaluation are future work.
+- Cancellation is currently recorded as a failed node with `CancelledError`, and stopping an async wrapper cannot forcibly stop synchronous work already running in a thread.
+- Node-trace persistence is best-effort; a successful node can still complete if its trace could not be saved.
 
-## Safety model
+## Development workflow
 
-The project intentionally separates:
-
-```text
-read evidence
-     ↓
-reason about evidence
-     ↓
-prepare proposal
-     ↓
-human review
-     ↓
-perform permitted write
-```
-
-The agent should not silently convert uncertain evidence into an autonomous engineering action.
-
-## Development approach
-
-Features are implemented in small branches, tested independently, reviewed through pull requests, and merged into `master` only after validation.
-
-The current verified baseline is:
-
-```text
-Part 12 complete
-81 tests passing
-FastAPI runtime verified
-Human approval flow verified
-```
+Features are developed in dedicated branches, tested locally, and proposed through pull requests into `master`. The next engineering priorities are **automated CI checks, repository cleanup, and repeatable agent-evaluation scenarios**.
