@@ -5,3 +5,5 @@ __pycache__/
 .pytest-tmp*/
 .env
 runtime/
+# Generated agent evaluation reports
+evals/results/

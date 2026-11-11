@@ -1,0 +1,117 @@
+
+[
+  {
+    "id": "ci_passes",
+    "description": "A passing CI run should terminate early.",
+    "reports": {
+      "get_ci_status": {
+        "run_id": 42,
+        "service": "backend",
+        "status": "passed"
+      }
+    },
+    "expected": {
+      "ci_status": "passed",
+      "tool_calls": ["get_ci_status"],
+      "proposal": false,
+      "errors": []
+    }
+  },
+  {
+    "id": "ci_failure_with_evidence",
+    "description": "A failed CI run should collect evidence and prepare an issue proposal.",
+    "reports": {
+      "get_ci_status": {
+        "run_id": 42,
+        "service": "backend",
+        "status": "failed"
+      },
+      "get_failed_tests": {
+        "run_id": 42,
+        "tests": [
+          {
+            "name": "test_backend_is_ready",
+            "message": "Expected HTTP 200, received HTTP 503."
+          }
+        ]
+      },
+      "read_logs": {
+        "run_id": 42,
+        "service": "backend",
+        "entries": [
+          {
+            "level": "ERROR",
+            "message": "Database readiness check failed."
+          }
+        ]
+      },
+      "get_service_status": {
+        "service": "backend",
+        "environment": "local",
+        "status": "degraded"
+      }
+    },
+    "expected": {
+      "ci_status": "failed",
+      "tool_calls": [
+        "get_ci_status",
+        "get_failed_tests",
+        "read_logs",
+        "get_service_status"
+      ],
+      "proposal": true,
+      "errors": [],
+      "required_evidence": [
+        "test_backend_is_ready",
+        "Database readiness check failed.",
+        "Root cause is not established."
+      ]
+    }
+  },
+  {
+    "id": "mismatched_log_run",
+    "description": "Evidence from another CI run must not enter the proposal.",
+    "reports": {
+      "get_ci_status": {
+        "run_id": 42,
+        "service": "backend",
+        "status": "failed"
+      },
+      "get_failed_tests": {
+        "run_id": 42,
+        "tests": []
+      },
+      "read_logs": {
+        "run_id": 999,
+        "service": "backend",
+        "entries": [
+          {
+            "level": "ERROR",
+            "message": "UNRELATED_RUN_PRIVATE_EVIDENCE"
+          }
+        ]
+      },
+      "get_service_status": {
+        "service": "backend",
+        "environment": "local",
+        "status": "healthy"
+      }
+    },
+    "expected": {
+      "ci_status": "failed",
+      "tool_calls": [
+        "get_ci_status",
+        "get_failed_tests",
+        "read_logs",
+        "get_service_status"
+      ],
+      "proposal": true,
+      "errors": [
+        "Log report CI run or service does not match."
+      ],
+      "forbidden_evidence": [
+        "UNRELATED_RUN_PRIVATE_EVIDENCE"
+      ]
+    }
+  }
+]
