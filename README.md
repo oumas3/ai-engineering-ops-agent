@@ -1,10 +1,12 @@
 # AI Engineering Operations Agent
 
+[![Python Tests](https://github.com/oumas3/ai-engineering-ops-agent/actions/workflows/tests.yml/badge.svg?branch=master)](https://github.com/oumas3/ai-engineering-ops-agent/actions/workflows/tests.yml)
+
 A stateful engineering operations agent for investigating CI failures using validated evidence, MCP tools, LangGraph workflows, SQLite persistence, optional LLM analysis, and human approval for write actions.
 
 Built as an incremental **AI engineering and reliability** project: evidence is collected before hypotheses are proposed, and write operations require explicit permission and approval.
 
-**Project status:** Parts 1–16 implemented. The latest locally reported full test run was **106 passed** (November 2026). This result was reported from local pytest execution, not independently verified by a GitHub Actions run. Automated CI is a planned improvement.
+**Project status:** Parts 1–18 implemented and merged. GitHub Actions runs the full suite (**115 tests**) and the agent evaluation scorecard (**3 scenarios, 18/18 checks**) on Ubuntu and Windows for every pull request. The 100% evaluation score covers only these deterministic scenarios; it is not a measure of real-world root-cause accuracy.
 
 ## What it does
 
@@ -205,8 +207,13 @@ Older investigations created before event tracing may have empty event or trace 
 | `src/ops_agent/observability.py` | Execution-duration calculations |
 | `src/ops_agent/web/index.html` | Browser dashboard |
 | `tests/` | Automated tests |
+| `evals/scenarios.json` | Deterministic agent evaluation scenarios |
+| `evals/metrics.py` | Behaviour and safety metrics |
+| `evals/run.py` | Evaluation runner and JSON scorecard |
+| `evals/results/` | Generated scorecards (ignored by Git) |
+| `.github/workflows/tests.yml` | CI: tests and evaluations on Ubuntu and Windows |
 
-The `runtime/` directory and `.env` files are ignored by Git.
+The `runtime/` directory, `.env` files, pytest temporary folders, and `evals/results/` are ignored by Git.
 
 ## Testing
 
@@ -218,9 +225,50 @@ python -m pytest -q --basetemp=.\.pytest-tmp-all
 git diff --check
 ```
 
-**Last reported local result: 106 passed (November 2026).** This is a development baseline, not a claim that GitHub CI has executed the suite.
+Pytest requires the `--basetemp` folder not to exist yet; use a new name if a previous run left one behind.
 
-Tests cover validation, MCP integration, conditional routing, read-tool timeouts, SQLite checkpointing, approval and issue-creation safeguards, HTTP responses, lifecycle events, duration calculations, node tracing, interrupts, resumption, and trace-storage failures.
+The suite has **115 tests**. They cover validation, MCP integration, conditional routing, read-tool timeouts, SQLite checkpointing, approval and issue-creation safeguards, HTTP responses, lifecycle events, duration calculations, node tracing, interrupts, resumption, trace-storage failures, and the evaluation framework itself.
+
+## Agent evaluation
+
+Unit tests check that individual functions work. The evaluation framework checks that the **agent as a whole makes the right decisions** for a given situation.
+
+```powershell
+$env:PYTHONPATH = "src"
+python -m evals.run
+```
+
+Each scenario in `evals/scenarios.json` feeds mocked MCP tool responses into the real LangGraph workflow:
+
+| Scenario | Expected behaviour |
+|---|---|
+| `ci_passes` | A passing CI run ends the investigation after one tool call |
+| `ci_failure_with_evidence` | A failed run collects tests, logs, and service health, then proposes an issue that cites the evidence and states its uncertainty |
+| `mismatched_log_run` | Logs from a different CI run are rejected and do not contaminate the proposal |
+
+Every scenario is scored on six checks:
+
+| Metric | What it verifies |
+|---|---|
+| Routing | The exact sequence of tool calls |
+| CI interpretation | The CI status was read correctly |
+| Proposal accuracy | A proposal exists only when one is expected |
+| Error handling | The expected errors were recorded |
+| Evidence integrity | Required evidence is present and forbidden evidence is absent |
+| Write safety | No issue was created during evaluation |
+
+The runner prints a summary, writes `evals/results/latest.json`, and exits with a non-zero code if any scenario fails, so CI fails on a regression. Current result: **3/3 scenarios, 18/18 checks**.
+
+**Scope of the score:** these are a small set of deterministic, hand-written scenarios. A 100% score shows that known behaviours have not regressed; it does not measure accuracy on arbitrary real-world failures.
+
+## Continuous integration
+
+`.github/workflows/tests.yml` runs on every push to `master` and every pull request targeting `master`:
+
+- Matrix: `ubuntu-latest` and `windows-latest`, Python 3.12
+- Read-only repository permissions
+- Runs the full pytest suite, then `python -m evals.run`
+- Uploads each platform's scorecard as an artifact (`agent-evaluation-<os>`, kept for 14 days), even when an earlier step fails
 
 ## Design and safety principles
 
@@ -243,8 +291,9 @@ This project is intended for **local development and evaluation**. The API does 
 | Part 14: investigation history and reopening results | Complete |
 | Part 15: lifecycle observability and duration metrics | Complete |
 | Part 16: LangGraph node-level tracing | Complete |
-| Part 17: project quality, documentation, and automated CI | Planned |
-| Part 18: agent evaluation and regression scenarios | Planned |
+| Part 17: automated CI on Ubuntu and Windows | Complete |
+| Part 18: agent evaluation scenarios and CI scorecards | Complete |
+| Part 19: documentation refresh and finish-up | In progress |
 
 ## Current limitations
 
@@ -252,10 +301,11 @@ This project is intended for **local development and evaluation**. The API does 
 - The evidence-gathering workflow is predefined; dynamic model-driven tool planning is not implemented.
 - LLM analysis is optional and should not be treated as verified root cause.
 - Dependency versions are not fully locked for reproducible installs.
-- CI automation and systematic agent evaluation are future work.
+- The evaluation set is small (three deterministic scenarios) and does not yet cover malformed tool payloads, timeouts, or approval rejection and resumption.
+- The investigation queue is in memory; queued jobs that have not started are lost if the server stops.
 - Cancellation is currently recorded as a failed node with `CancelledError`, and stopping an async wrapper cannot forcibly stop synchronous work already running in a thread.
 - Node-trace persistence is best-effort; a successful node can still complete if its trace could not be saved.
 
 ## Development workflow
 
-Features are developed in dedicated branches, tested locally, and proposed through pull requests into `master`. The next engineering priorities are **automated CI checks, repository cleanup, and repeatable agent-evaluation scenarios**.
+Features are developed in dedicated branches, tested locally, and proposed through pull requests into `master`. Every pull request must pass the CI tests and evaluation scorecard before merge. The next engineering priorities are **broader evaluation scenarios, queue and approval reliability, and reproducible dependency installs**.
