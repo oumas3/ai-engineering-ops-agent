@@ -2,9 +2,9 @@ import asyncio
 
 import pytest
 
-from evals.run import build_fake_client
 from ops_agent.state import create_initial_state
 from ops_agent.workflow import build_graph
+from evals.run import build_fake_client, run_scenario
 
 
 FAILED_RUN_REPORTS = {
@@ -97,3 +97,24 @@ def test_unknown_fault_type_is_rejected() -> None:
 
     with pytest.raises(ValueError, match="unknown fault types"):
         build_fake_client(scenario)
+
+def test_unexpected_tool_call_is_scored_not_crashed() -> None:
+    # Failed CI makes the agent call more tools, but this scenario
+    # (deliberately) only provides the CI report and expects one call.
+    scenario = {
+        "id": "unexpected_tool_call",
+        "reports": {
+            "get_ci_status": FAILED_RUN_REPORTS["get_ci_status"],
+        },
+        "expected": {
+            "ci_status": "failed",
+            "tool_calls": ["get_ci_status"],
+            "proposal": False,
+            "errors": [],
+        },
+    }
+
+    result = asyncio.run(run_scenario(scenario))
+
+    assert result["passed"] is False
+    assert "routing" in result["failed_metrics"]

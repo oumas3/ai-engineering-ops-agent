@@ -3,6 +3,7 @@ import asyncio
 import json
 
 from datetime import datetime, timezone
+from os import name
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -48,9 +49,18 @@ def build_fake_client(scenario: dict) -> AsyncMock:
                 is_error=True,
                 structured_content=None,
             )
+        report = scenario["reports"].get(name)
+        if report is None:
+            # The agent called a tool this scenario has no report for.
+            # Answer like a failing tool so the run finishes and the
+            # routing metric records the unexpected call.
+            return SimpleNamespace(
+                is_error=True,
+                structured_content=None,
+            )
         return SimpleNamespace(
             is_error=False,
-            structured_content=scenario["reports"][name],
+            structured_content=report,
         )
 
     client.call_tool.side_effect = call_tool
