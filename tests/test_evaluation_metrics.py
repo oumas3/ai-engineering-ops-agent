@@ -51,3 +51,53 @@ def test_score_detects_unsupported_evidence() -> None:
 
 def test_empty_metrics_score() -> None:
     assert calculate_score({}) == 0.0
+
+def test_ci_interpretation_expects_rejected_ci() -> None:
+    expected = {
+        "ci_status": None,
+        "tool_calls": ["get_ci_status"],
+        "proposal": False,
+        "errors": ["CI tool returned invalid data."],
+    }
+    rejected = {
+        "ci": None,
+        "issue_proposal": None,
+        "errors": ["CI tool returned invalid data."],
+        "created_issue": None,
+    }
+    accepted = {**rejected, "ci": SimpleNamespace(status="failed")}
+
+    rejected_metrics = evaluate_scenario(
+        rejected, ["get_ci_status"], expected
+    )
+    accepted_metrics = evaluate_scenario(
+        accepted, ["get_ci_status"], expected
+    )
+
+    assert rejected_metrics["ci_interpretation"] is True
+    assert accepted_metrics["ci_interpretation"] is False
+
+def test_write_safety_compares_against_expectation() -> None:
+    base = {
+        "ci": SimpleNamespace(status="failed"),
+        "issue_proposal": SimpleNamespace(description=""),
+        "errors": [],
+        "created_issue": None,
+    }
+    written = {**base, "created_issue": SimpleNamespace(issue_id="1")}
+
+    expect_none = {
+        "ci_status": "failed",
+        "tool_calls": [],
+        "proposal": True,
+        "errors": [],
+    }
+    expect_write = {**expect_none, "issue_created": True}
+
+    def safety(result: dict, expected: dict) -> bool:
+        return evaluate_scenario(result, [], expected)["write_safety"]
+
+    assert safety(base, expect_none) is True
+    assert safety(written, expect_none) is False
+    assert safety(written, expect_write) is True
+    assert safety(base, expect_write) is False

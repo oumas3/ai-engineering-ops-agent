@@ -1,15 +1,19 @@
 
 import asyncio
-import json
-
 from datetime import datetime, timezone
+import json
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.types import Command
 from mcp import Client
 
 from evals.metrics import calculate_score, evaluate_scenario
+from ops_agent.models import AgentPermissions
+from ops_agent.persistence import create_serializer
 from ops_agent.state import create_initial_state
 from ops_agent.workflow import build_graph
 
@@ -19,23 +23,65 @@ DATASET = ROOT / "evals" / "scenarios.json"
 OUTPUT = ROOT / "evals" / "results" / "latest.json"
 
 
-async def run_scenario(scenario: dict) -> dict:
-    """Execute one deterministic evaluation scenario."""
+FAULT_TYPES = {"error", "timeout"}
+
+
+def build_fake_client(scenario: dict) -> AsyncMock:
+    """Return a mocked MCP client that replays a scenario's reports.
+
+    A scenario may declare ``faults`` mapping a tool name to ``"error"``
+    (the tool reports a failure) or ``"timeout"`` (every call raises
+    ``TimeoutError``, so the agent's single retry also times out).
+    """
+    faults = scenario.get("faults", {})
+    unknown = set(faults.values()) - FAULT_TYPES
+    if unknown:
+        raise ValueError(
+            f"Scenario {scenario['id']} has unknown fault types: "
+            f"{sorted(unknown)}"
+        )
+
     client = AsyncMock(spec=Client)
 
     async def call_tool(name: str, arguments: dict):
+        fault = faults.get(name)
+        if fault == "timeout":
+            raise TimeoutError(f"Simulated timeout: {name}")
+        if fault == "error":
+            return SimpleNamespace(
+                is_error=True,
+                structured_content=None,
+            )
+        report = scenario["reports"].get(name)
+        if report is None:
+            # The agent called a tool this scenario has no report for.
+            # Answer like a failing tool so the run finishes and the
+            # routing metric records the unexpected call.
+            return SimpleNamespace(
+                is_error=True,
+                structured_content=None,
+            )
         return SimpleNamespace(
             is_error=False,
-            structured_content=scenario["reports"][name],
+            structured_content=report,
         )
 
     client.call_tool.side_effect = call_tool
+    return client
 
-    graph = build_graph(client)
 
-    result = await graph.ainvoke(
-        create_initial_state("backend", "local")
-    )
+async def run_scenario(scenario: dict) -> dict:
+    """Execute one deterministic evaluation scenario."""
+    client = build_fake_client(scenario)
+    decision = scenario.get("approval")
+
+    if decision is None:
+        graph = build_graph(client)
+        result = await graph.ainvoke(
+            create_initial_state("backend", "local")
+        )
+    else:
+        result = await run_with_approval(client, scenario["id"], decision)
 
     called_tools = [
         call.args[0]
@@ -62,6 +108,42 @@ async def run_scenario(scenario: dict) -> dict:
         "failed_metrics": failed_metrics,
     }
 
+
+APPROVAL_DECISIONS = {"approved", "rejected"}
+
+
+async def run_with_approval(
+    client: AsyncMock,
+    scenario_id: str,
+    decision: str,
+) -> dict:
+    """Run with issue creation enabled and answer the approval pause."""
+    if decision not in APPROVAL_DECISIONS:
+        raise ValueError(
+            f"Scenario {scenario_id} has invalid approval: {decision!r}"
+        )
+
+    with TemporaryDirectory() as issue_directory:
+        graph = build_graph(
+            client,
+            checkpointer=InMemorySaver(serde=create_serializer()),
+            permissions=AgentPermissions(can_create_issue=True),
+            issue_directory=Path(issue_directory),
+        )
+        config = {"configurable": {"thread_id": scenario_id}}
+
+        result = await graph.ainvoke(
+            create_initial_state("backend", "local"),
+            config=config,
+        )
+
+        if "__interrupt__" in result:
+            result = await graph.ainvoke(
+                Command(resume=decision),
+                config=config,
+            )
+
+    return result
 
 async def run_evaluations(scenarios: list[dict]) -> dict:
     """Execute scenarios and summarize their quality metrics."""
@@ -107,7 +189,7 @@ def save_report(report: dict, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
 
     path.write_text(
-        json.dumps(report, indent=2) + "\n",
+      json.dumps(report, indent=2) + "\n",
         encoding="utf-8",
     )
 

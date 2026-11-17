@@ -6,7 +6,7 @@ A stateful engineering operations agent for investigating CI failures using vali
 
 Built as an incremental **AI engineering and reliability** project: evidence is collected before hypotheses are proposed, and write operations require explicit permission and approval.
 
-**Project status:** Parts 1–18 implemented and merged. GitHub Actions runs the full suite (**115 tests**) and the agent evaluation scorecard (**3 scenarios, 18/18 checks**) on Ubuntu and Windows for every pull request. The 100% evaluation score covers only these deterministic scenarios; it is not a measure of real-world root-cause accuracy.
+**Project status:** Parts 1–20 implemented. GitHub Actions runs the full suite (**129 tests**) and the agent evaluation scorecard (**8 scenarios, 48/48 checks**) on Ubuntu and Windows for every pull request. The 100% evaluation score covers only these deterministic scenarios; it is not a measure of real-world root-cause accuracy.
 
 ## What it does
 
@@ -227,7 +227,7 @@ git diff --check
 
 Pytest requires the `--basetemp` folder not to exist yet; use a new name if a previous run left one behind.
 
-The suite has **115 tests**. They cover validation, MCP integration, conditional routing, read-tool timeouts, SQLite checkpointing, approval and issue-creation safeguards, HTTP responses, lifecycle events, duration calculations, node tracing, interrupts, resumption, trace-storage failures, and the evaluation framework itself.
+The suite has **129 tests**. They cover validation, MCP integration, conditional routing, read-tool timeouts, SQLite checkpointing, approval and issue-creation safeguards, HTTP responses, lifecycle events, duration calculations, node tracing, interrupts, resumption, trace-storage failures, and the evaluation framework itself.
 
 ## Agent evaluation
 
@@ -238,26 +238,31 @@ $env:PYTHONPATH = "src"
 python -m evals.run
 ```
 
-Each scenario in `evals/scenarios.json` feeds mocked MCP tool responses into the real LangGraph workflow:
+Each scenario in `evals/scenarios.json` feeds mocked MCP tool responses into the real LangGraph workflow. A scenario can also inject tool faults (`"faults": {"read_logs": "timeout"}`) or play the human approver (`"approval": "approved"`); approval scenarios enable issue creation and write any issue to a temporary directory, never to `runtime/`.
 
 | Scenario | Expected behaviour |
 |---|---|
 | `ci_passes` | A passing CI run ends the investigation after one tool call |
 | `ci_failure_with_evidence` | A failed run collects tests, logs, and service health, then proposes an issue that cites the evidence and states its uncertainty |
 | `mismatched_log_run` | Logs from a different CI run are rejected and do not contaminate the proposal |
+| `logs_timeout` | A timed-out logs tool is retried once; other evidence is kept and the gap is disclosed |
+| `failed_tests_tool_error` | A failing tool is not retried, and no test failures are invented |
+| `malformed_ci_payload` | Invalid CI data is rejected and the investigation stops without a proposal |
+| `approval_rejected` | With write permission on, a human rejection prevents issue creation |
+| `approval_approved` | With write permission on, a human approval creates exactly one local issue |
 
 Every scenario is scored on six checks:
 
 | Metric | What it verifies |
 |---|---|
 | Routing | The exact sequence of tool calls |
-| CI interpretation | The CI status was read correctly |
+| CI interpretation | The CI status was read correctly, or invalid CI data was rejected when rejection is expected |
 | Proposal accuracy | A proposal exists only when one is expected |
 | Error handling | The expected errors were recorded |
 | Evidence integrity | Required evidence is present and forbidden evidence is absent |
-| Write safety | No issue was created during evaluation |
+| Write safety | An issue was created if and only if the scenario expects one |
 
-The runner prints a summary, writes `evals/results/latest.json`, and exits with a non-zero code if any scenario fails, so CI fails on a regression. Current result: **3/3 scenarios, 18/18 checks**.
+The runner prints a summary, writes `evals/results/latest.json`, and exits with a non-zero code if any scenario fails, so CI fails on a regression. Current result: **8/8 scenarios, 48/48 checks**.
 
 **Scope of the score:** these are a small set of deterministic, hand-written scenarios. A 100% score shows that known behaviours have not regressed; it does not measure accuracy on arbitrary real-world failures.
 
@@ -293,7 +298,8 @@ This project is intended for **local development and evaluation**. The API does 
 | Part 16: LangGraph node-level tracing | Complete |
 | Part 17: automated CI on Ubuntu and Windows | Complete |
 | Part 18: agent evaluation scenarios and CI scorecards | Complete |
-| Part 19: documentation refresh and finish-up | In progress |
+| Part 19: documentation refresh | Complete |
+| Part 20: evaluation hardening (fault injection, approval scenarios, falsifiable metrics) | Complete |
 
 ## Current limitations
 
@@ -301,7 +307,7 @@ This project is intended for **local development and evaluation**. The API does 
 - The evidence-gathering workflow is predefined; dynamic model-driven tool planning is not implemented.
 - LLM analysis is optional and should not be treated as verified root cause.
 - Dependency versions are not fully locked for reproducible installs.
-- The evaluation set is small (three deterministic scenarios) and does not yet cover malformed tool payloads, timeouts, or approval rejection and resumption.
+- The evaluation set is small (eight hand-written scenarios), and evidence integrity uses substring matching. Duplicate approval decisions and resumption after a server restart are not yet evaluated.
 - The investigation queue is in memory; queued jobs that have not started are lost if the server stops.
 - Cancellation is currently recorded as a failed node with `CancelledError`, and stopping an async wrapper cannot forcibly stop synchronous work already running in a thread.
 - Node-trace persistence is best-effort; a successful node can still complete if its trace could not be saved.

@@ -19,14 +19,17 @@ def load_scenarios() -> list[dict]:
 
 
 def test_scorecard_aggregates_scenarios() -> None:
-    report = asyncio.run(
-        run_evaluations(load_scenarios())
-    )
+    scenarios = load_scenarios()
+    report = asyncio.run(run_evaluations(scenarios))
 
-    assert report["scenario_count"] == 3
-    assert report["passed_scenarios"] == 3
-    assert report["total_checks"] == 18
-    assert report["passed_checks"] == 18
+    count = len(scenarios)
+    checks_per_scenario = 6
+
+    assert count >= 3
+    assert report["scenario_count"] == count
+    assert report["passed_scenarios"] == count
+    assert report["total_checks"] == count * checks_per_scenario
+    assert report["passed_checks"] == count * checks_per_scenario
     assert report["check_pass_rate_pct"] == 100.0
 
 
@@ -37,8 +40,7 @@ def test_scorecard_detects_regression() -> None:
     scenarios[0]["expected"]["ci_status"] = "failed"
 
     report = asyncio.run(run_evaluations(scenarios))
-
-    assert report["passed_scenarios"] == 2
+    assert report["passed_scenarios"] == len(scenarios) - 1
     assert report["check_pass_rate_pct"] < 100.0
 
     first = report["scenarios"][0]

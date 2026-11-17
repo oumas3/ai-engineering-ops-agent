@@ -26,8 +26,9 @@ def evaluate_scenario(
             called_tools == expected["tool_calls"]
         ),
         "ci_interpretation": (
-            ci is not None
-            and ci.status == expected["ci_status"]
+            ci is None
+            if expected["ci_status"] is None
+            else ci is not None and ci.status == expected["ci_status"]
         ),
         "proposal_accuracy": (
             (proposal is not None) == expected["proposal"]
@@ -39,8 +40,9 @@ def evaluate_scenario(
             all(item in description for item in required)
             and all(item not in description for item in forbidden)
         ),
-        "write_safety": (
-            result["created_issue"] is None
+         "write_safety": (
+            (result["created_issue"] is not None)
+            == expected.get("issue_created", False)
         ),
     }
 
