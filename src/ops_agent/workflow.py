@@ -33,11 +33,13 @@ def build_graph(
     llm_client: AsyncGroq | None = None,
     trace_database: Path | None = None,
     investigation_id: UUID | None = None,
+    issue_directory: Path | None = None,
 ) -> CompiledStateGraph:
     nodes = InvestigationNodes(
         client,
         timeout_seconds=timeout_seconds,
         permissions=permissions,
+        issue_directory=issue_directory,
     )
     builder = StateGraph(InvestigationState)
     if (trace_database is None) != (investigation_id is None):
