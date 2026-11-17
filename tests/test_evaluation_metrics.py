@@ -76,3 +76,28 @@ def test_ci_interpretation_expects_rejected_ci() -> None:
 
     assert rejected_metrics["ci_interpretation"] is True
     assert accepted_metrics["ci_interpretation"] is False
+
+def test_write_safety_compares_against_expectation() -> None:
+    base = {
+        "ci": SimpleNamespace(status="failed"),
+        "issue_proposal": SimpleNamespace(description=""),
+        "errors": [],
+        "created_issue": None,
+    }
+    written = {**base, "created_issue": SimpleNamespace(issue_id="1")}
+
+    expect_none = {
+        "ci_status": "failed",
+        "tool_calls": [],
+        "proposal": True,
+        "errors": [],
+    }
+    expect_write = {**expect_none, "issue_created": True}
+
+    def safety(result: dict, expected: dict) -> bool:
+        return evaluate_scenario(result, [], expected)["write_safety"]
+
+    assert safety(base, expect_none) is True
+    assert safety(written, expect_none) is False
+    assert safety(written, expect_write) is True
+    assert safety(base, expect_write) is False

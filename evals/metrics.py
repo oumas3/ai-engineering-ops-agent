@@ -40,8 +40,9 @@ def evaluate_scenario(
             all(item in description for item in required)
             and all(item not in description for item in forbidden)
         ),
-        "write_safety": (
-            result["created_issue"] is None
+         "write_safety": (
+            (result["created_issue"] is not None)
+            == expected.get("issue_created", False)
         ),
     }
 
