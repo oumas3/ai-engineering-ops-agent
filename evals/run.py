@@ -19,17 +19,47 @@ DATASET = ROOT / "evals" / "scenarios.json"
 OUTPUT = ROOT / "evals" / "results" / "latest.json"
 
 
-async def run_scenario(scenario: dict) -> dict:
-    """Execute one deterministic evaluation scenario."""
+FAULT_TYPES = {"error", "timeout"}
+
+
+def build_fake_client(scenario: dict) -> AsyncMock:
+    """Return a mocked MCP client that replays a scenario's reports.
+
+    A scenario may declare ``faults`` mapping a tool name to ``"error"``
+    (the tool reports a failure) or ``"timeout"`` (every call raises
+    ``TimeoutError``, so the agent's single retry also times out).
+    """
+    faults = scenario.get("faults", {})
+    unknown = set(faults.values()) - FAULT_TYPES
+    if unknown:
+        raise ValueError(
+            f"Scenario {scenario['id']} has unknown fault types: "
+            f"{sorted(unknown)}"
+        )
+
     client = AsyncMock(spec=Client)
 
     async def call_tool(name: str, arguments: dict):
+        fault = faults.get(name)
+        if fault == "timeout":
+            raise TimeoutError(f"Simulated timeout: {name}")
+        if fault == "error":
+            return SimpleNamespace(
+                is_error=True,
+                structured_content=None,
+            )
         return SimpleNamespace(
             is_error=False,
             structured_content=scenario["reports"][name],
         )
 
     client.call_tool.side_effect = call_tool
+    return client
+
+
+async def run_scenario(scenario: dict) -> dict:
+    """Execute one deterministic evaluation scenario."""
+    client = build_fake_client(scenario)
 
     graph = build_graph(client)
 
