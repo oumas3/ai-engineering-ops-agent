@@ -51,3 +51,28 @@ def test_score_detects_unsupported_evidence() -> None:
 
 def test_empty_metrics_score() -> None:
     assert calculate_score({}) == 0.0
+
+def test_ci_interpretation_expects_rejected_ci() -> None:
+    expected = {
+        "ci_status": None,
+        "tool_calls": ["get_ci_status"],
+        "proposal": False,
+        "errors": ["CI tool returned invalid data."],
+    }
+    rejected = {
+        "ci": None,
+        "issue_proposal": None,
+        "errors": ["CI tool returned invalid data."],
+        "created_issue": None,
+    }
+    accepted = {**rejected, "ci": SimpleNamespace(status="failed")}
+
+    rejected_metrics = evaluate_scenario(
+        rejected, ["get_ci_status"], expected
+    )
+    accepted_metrics = evaluate_scenario(
+        accepted, ["get_ci_status"], expected
+    )
+
+    assert rejected_metrics["ci_interpretation"] is True
+    assert accepted_metrics["ci_interpretation"] is False
