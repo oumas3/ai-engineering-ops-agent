@@ -231,5 +231,109 @@
         "CI tool returned invalid data."
       ]
     }
+  },
+  {
+    "id": "approval_rejected",
+    "description": "With write permission enabled, a human rejection must prevent issue creation.",
+    "reports": {
+      "get_ci_status": {
+        "run_id": 42,
+        "service": "backend",
+        "status": "failed"
+      },
+      "get_failed_tests": {
+        "run_id": 42,
+        "tests": [
+          {
+            "name": "test_backend_is_ready",
+            "message": "Expected HTTP 200, received HTTP 503."
+          }
+        ]
+      },
+      "read_logs": {
+        "run_id": 42,
+        "service": "backend",
+        "entries": [
+          {
+            "level": "ERROR",
+            "message": "Database readiness check failed."
+          }
+        ]
+      },
+      "get_service_status": {
+        "service": "backend",
+        "environment": "local",
+        "status": "degraded"
+      }
+    },
+    "approval": "rejected",
+    "expected": {
+      "ci_status": "failed",
+      "tool_calls": [
+        "get_ci_status",
+        "get_failed_tests",
+        "read_logs",
+        "get_service_status"
+      ],
+      "proposal": true,
+      "errors": [],
+      "issue_created": false,
+      "required_evidence": [
+        "test_backend_is_ready",
+        "Root cause is not established."
+      ]
+    }
+  },
+  {
+    "id": "approval_approved",
+    "description": "With write permission enabled, a human approval creates exactly one local issue.",
+    "reports": {
+      "get_ci_status": {
+        "run_id": 42,
+        "service": "backend",
+        "status": "failed"
+      },
+      "get_failed_tests": {
+        "run_id": 42,
+        "tests": [
+          {
+            "name": "test_backend_is_ready",
+            "message": "Expected HTTP 200, received HTTP 503."
+          }
+        ]
+      },
+      "read_logs": {
+        "run_id": 42,
+        "service": "backend",
+        "entries": [
+          {
+            "level": "ERROR",
+            "message": "Database readiness check failed."
+          }
+        ]
+      },
+      "get_service_status": {
+        "service": "backend",
+        "environment": "local",
+        "status": "degraded"
+      }
+    },
+    "approval": "approved",
+    "expected": {
+      "ci_status": "failed",
+      "tool_calls": [
+        "get_ci_status",
+        "get_failed_tests",
+        "read_logs",
+        "get_service_status"
+      ],
+      "proposal": true,
+      "errors": [],
+      "issue_created": true,
+      "required_evidence": [
+        "test_backend_is_ready",
+        "Root cause is not established."
+      ]
+    }
   }
 ]
