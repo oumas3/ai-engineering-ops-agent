@@ -157,7 +157,57 @@
       "required_evidence": [
         "test_backend_is_ready",
         "Collection limitation: Logs tool timed out.",
+           "Root cause is not established."
+      ]
+    }
+  },
+  {
+    "id": "failed_tests_tool_error",
+    "description": "A failing failed-tests tool is not retried; logs and health are kept and no test failures are invented.",
+    "reports": {
+      "get_ci_status": {
+        "run_id": 42,
+        "service": "backend",
+        "status": "failed"
+      },
+      "read_logs": {
+        "run_id": 42,
+        "service": "backend",
+        "entries": [
+          {
+            "level": "ERROR",
+            "message": "Database readiness check failed."
+          }
+        ]
+      },
+      "get_service_status": {
+        "service": "backend",
+        "environment": "local",
+        "status": "degraded"
+      }
+    },
+    "faults": {
+      "get_failed_tests": "error"
+    },
+    "expected": {
+      "ci_status": "failed",
+      "tool_calls": [
+        "get_ci_status",
+        "get_failed_tests",
+        "read_logs",
+        "get_service_status"
+      ],
+      "proposal": true,
+      "errors": [
+        "Failed-tests tool execution failed."
+      ],
+      "required_evidence": [
+        "Database readiness check failed.",
+        "Collection limitation: Failed-tests tool execution failed.",
         "Root cause is not established."
+      ],
+      "forbidden_evidence": [
+        "Failed test:"
       ]
     }
   }
